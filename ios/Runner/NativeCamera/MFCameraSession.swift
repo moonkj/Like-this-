@@ -7,8 +7,10 @@ final class MFCameraSession: NSObject {
 
     private let captureSession = AVCaptureSession()
     private let videoOutput    = AVCaptureVideoDataOutput()
+    private let audioOutput    = AVCaptureAudioDataOutput()
     private let photoOutput    = AVCapturePhotoOutput()
     private let sessionQueue   = DispatchQueue(label: "com.likethis.camera.session", qos: .userInteractive)
+    private let audioQueue     = DispatchQueue(label: "com.likethis.camera.audio", qos: .userInteractive)
 
     private var currentDevice: AVCaptureDevice?
     private var isFront: Bool
@@ -143,6 +145,15 @@ final class MFCameraSession: NSObject {
         if captureSession.canAddOutput(videoOutput) { captureSession.addOutput(videoOutput) }
         if captureSession.canAddOutput(photoOutput) { captureSession.addOutput(photoOutput) }
 
+        // ── 오디오 입력 + 출력 ──
+        if let audioDev = AVCaptureDevice.default(for: .audio),
+           let audioInp = try? AVCaptureDeviceInput(device: audioDev),
+           captureSession.canAddInput(audioInp) {
+            captureSession.addInput(audioInp)
+        }
+        audioOutput.setSampleBufferDelegate(self, queue: audioQueue)
+        if captureSession.canAddOutput(audioOutput) { captureSession.addOutput(audioOutput) }
+
         fixVideoOrientation()
         captureSession.commitConfiguration()
     }
@@ -185,12 +196,18 @@ extension MFCameraSession: FlutterTexture {
     }
 }
 
-// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate + AVCaptureAudioDataOutputSampleBufferDelegate
 
-extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate {
+extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput,
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        // ── 오디오 버퍼 ──
+        if output === audioOutput {
+            videoRecorder.appendAudio(sampleBuffer: sampleBuffer)
+            return
+        }
+
         guard let rawBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         bwEngine.detectFaces(in: rawBuffer)
         makeOutputPool(matching: rawBuffer)
@@ -203,7 +220,7 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
         if videoRecorder.isRecording {
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            videoRecorder.append(ciImage: processed, context: bwEngine.context, at: pts)
+            videoRecorder.appendVideo(ciImage: processed, context: bwEngine.context, at: pts)
         }
     }
 }
