@@ -269,10 +269,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   _buildCameraPreview(camState),
 
                   // 제스처 영역 (강도 바 위)
+                  // bottom: 100 = slider(bottom:20, h:56) + overlay_radius(20) + buffer(4)
                   if (camState.isReady)
                     Positioned(
                       top: 0, left: 0, right: 0,
-                      bottom: _showIntensityPanel ? 80 : 0,
+                      bottom: _showIntensityPanel ? 100 : 0,
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         onTap: _onTap,
@@ -338,29 +339,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     ),
                   ),
 
-                  // 비교 모드 라벨
+                  // 비교 모드 분할 오버레이
                   if (_isComparing)
-                    Positioned(
-                      top: 12, left: 0, right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'ORIGINAL',
-                            style: TextStyle(
-                              color: AppColors.silver,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                        ),
-                      ),
+                    const Positioned.fill(
+                      child: _CompareSplitOverlay(),
                     ),
 
                   // 타이머 카운트다운
@@ -507,11 +489,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _timerSeconds > 0
-                  ? AppColors.silver.withValues(alpha: 0.25)
+                  ? Colors.black.withValues(alpha: 0.75)
                   : Colors.black.withValues(alpha: 0.55),
               border: Border.all(
-                color: _timerSeconds > 0 ? AppColors.silver : Colors.white24,
-                width: 0.5,
+                color: _timerSeconds > 0 ? Colors.white : Colors.white24,
+                width: _timerSeconds > 0 ? 1.5 : 0.5,
               ),
             ),
             child: _timerSeconds > 0
@@ -519,9 +501,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     child: Text(
                       '${_timerSeconds}s',
                       style: const TextStyle(
-                        color: AppColors.silver,
+                        color: Colors.white,
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   )
@@ -946,6 +928,89 @@ class _BottomIconButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+// ── 비교 모드 분할 오버레이 ───────────────────────────────────────────────────
+
+class _CompareSplitOverlay extends StatelessWidget {
+  const _CompareSplitOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 중앙 분할선
+        Center(
+          child: Container(
+            width: 1.5,
+            color: Colors.white.withValues(alpha: 0.9),
+          ),
+        ),
+        // 중앙 핸들
+        Center(
+          child: Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.compare_arrows_rounded,
+              color: Colors.black,
+              size: 18,
+            ),
+          ),
+        ),
+        // BEFORE 레이블 (왼쪽)
+        Positioned(
+          top: 14, left: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'BEFORE',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+        ),
+        // AFTER 레이블 (오른쪽)
+        Positioned(
+          top: 14, right: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'AFTER',
+              style: TextStyle(
+                color: AppColors.silver,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ModeTab extends StatelessWidget {

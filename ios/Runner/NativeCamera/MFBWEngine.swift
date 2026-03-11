@@ -75,14 +75,36 @@ final class MFBWEngine {
 
     /// CIImage 빌드 — 캡처용 (CIImage 직접)
     func buildImage(from input: CIImage) -> CIImage {
-        if _compareMode { return input }
+        let processed = buildProcessed(from: input)
+        if _compareMode {
+            return makeSplitImage(original: input, processed: processed)
+        }
+        return processed
+    }
+
+    private func buildProcessed(from input: CIImage) -> CIImage {
         let bwBase = toBW(input)
         let toned  = applyTone(bwBase)
-        // lutIntensity 블렌딩: 0.0 = 순수 B&W, 1.0 = 완전 필터 적용
         let blended = blend(from: bwBase, to: toned, amount: CGFloat(_lutIntensity))
         var image = applyExposureContrast(blended)
         image = applyEffects(image)
         return image.cropped(to: input.extent)
+    }
+
+    /// 비교 모드: 왼쪽 절반 = 원본 컬러, 오른쪽 절반 = B&W 필터 적용
+    private func makeSplitImage(original: CIImage, processed: CIImage) -> CIImage {
+        let extent = original.extent
+        let midX   = extent.midX
+        let leftRect  = CGRect(x: extent.minX, y: extent.minY,
+                               width: midX - extent.minX, height: extent.height)
+        let rightRect = CGRect(x: midX, y: extent.minY,
+                               width: extent.maxX - midX, height: extent.height)
+        let leftHalf  = original.cropped(to: leftRect)
+        let rightHalf = processed.cropped(to: rightRect)
+        guard let comp = CIFilter(name: "CISourceOverCompositing") else { return original }
+        comp.setValue(rightHalf, forKey: kCIInputImageKey)
+        comp.setValue(leftHalf,  forKey: kCIInputBackgroundImageKey)
+        return comp.outputImage?.cropped(to: extent) ?? original
     }
 
     /// 두 이미지 선형 블렌드 (CIDissolveTransition)
