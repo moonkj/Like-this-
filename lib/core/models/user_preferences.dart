@@ -45,4 +45,25 @@ class UserPreferences {
     saveToGallery: saveToGallery ?? this.saveToGallery,
     totalPhotosCaptured: totalPhotosCaptured ?? this.totalPhotosCaptured,
   );
+
+  factory UserPreferences.fromJson(Map<String, dynamic> json) => UserPreferences(
+    lastUsedFilterId: json['lastUsedFilterId'] as String? ?? 'bw_pure',
+    favoriteFilterIds: (json['favoriteFilterIds'] as List<dynamic>?)
+        ?.map((e) => e as String).toList() ?? const [],
+    defaultGrain: (json['defaultGrain'] as num?)?.toDouble() ?? 20.0,
+    defaultVignette: (json['defaultVignette'] as num?)?.toDouble() ?? 15.0,
+    hapticEnabled: json['hapticEnabled'] as bool? ?? true,
+    saveToGallery: json['saveToGallery'] as bool? ?? true,
+    totalPhotosCaptured: json['totalPhotosCaptured'] as int? ?? 0,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'lastUsedFilterId': lastUsedFilterId,
+    'favoriteFilterIds': favoriteFilterIds,
+    'defaultGrain': defaultGrain,
+    'defaultVignette': defaultVignette,
+    'hapticEnabled': hapticEnabled,
+    'saveToGallery': saveToGallery,
+    'totalPhotosCaptured': totalPhotosCaptured,
+  };
 }

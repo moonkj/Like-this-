@@ -79,6 +79,27 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 result.success(null)
             }
 
+            "setFlash" -> {
+                val mode = call.argument<String>("mode") ?: "off"
+                session?.setFlash(mode)
+                result.success(null)
+            }
+
+            "startRecording" -> {
+                session?.startRecording()
+                result.success(null)
+            }
+
+            "stopRecording" -> {
+                session?.stopRecording { path -> result.success(path) }
+            }
+
+            "setCompareMode" -> {
+                val enable = call.argument<Boolean>("enable") ?: false
+                session?.setCompareMode(enable)
+                result.success(null)
+            }
+
             // ── 필터 채널 ─────────────────────────────────────────────────────────
             "loadLUT" -> {
                 val assetPath = call.argument<String>("assetPath") ?: ""
@@ -93,6 +114,8 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 bwParams.exposure     = call.argument<Double>("exposure")?.toFloat() ?: 0f
                 bwParams.lightLeak    = call.argument<Double>("lightLeak")?.toFloat() ?: 0f
                 bwParams.vignette     = call.argument<Double>("vignette")?.toFloat() ?: 0.15f
+                bwParams.dust         = call.argument<Double>("dust")?.toFloat()  ?: 0f
+                bwParams.bloom        = call.argument<Double>("bloom")?.toFloat() ?: 0f
                 session?.updateRenderParams(bwParams)
                 result.success(null)
             }
@@ -111,6 +134,8 @@ data class BWRenderParams(
     var exposure: Float = 0.0f,
     var lightLeak: Float = 0.0f,
     var vignette: Float = 0.15f,
+    var dust: Float = 0.0f,
+    var bloom: Float = 0.0f,
 )
 
 /// MFCameraSession stub — CameraX 전체 구현은 별도 파일
@@ -121,6 +146,10 @@ class MFCameraSession {
     fun release() {}
     fun setExposure(ev: Float) {}
     fun setZoom(zoom: Float) {}
+    fun setFlash(mode: String) {}
+    fun startRecording() {}
+    fun stopRecording(callback: (String?) -> Unit) { callback(null) }
+    fun setCompareMode(enable: Boolean) {}
     fun capturePhoto(callback: (String?) -> Unit) { callback(null) }
     fun updateRenderParams(params: BWRenderParams) {}
 }

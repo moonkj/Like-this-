@@ -17,15 +17,24 @@ class GalleryScreen extends StatefulWidget {
 class _GalleryScreenState extends State<GalleryScreen> {
   List<AssetEntity> _assets = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
   bool _permissionDenied = false;
+
+  static const int _pageSize = 60;
+  int _currentPage = 0;
+  AssetPathEntity? _album;
 
   // 다중 선택 모드
   bool _isMultiSelectMode = false;
   final Set<String> _selectedIds = {};
 
+  late final ScrollController _scroll;
+
   @override
   void initState() {
     super.initState();
+    _scroll = ScrollController()..addListener(_onScroll);
     _loadPhotos();
     PhotoManager.addChangeCallback(_onPhotosChanged);
     PhotoManager.startChangeNotify();
@@ -33,9 +42,17 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   @override
   void dispose() {
+    _scroll.dispose();
     PhotoManager.removeChangeCallback(_onPhotosChanged);
     PhotoManager.stopChangeNotify();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scroll.position.pixels >=
+        _scroll.position.maxScrollExtent - 400) {
+      _loadMorePhotos();
+    }
   }
 
   void _onPhotosChanged(MethodCall call) {
@@ -48,7 +65,11 @@ class _GalleryScreenState extends State<GalleryScreen> {
       onlyAll: true,
     );
     if (albums.isEmpty || !mounted) return;
-    final assets = await albums.first.getAssetListPaged(page: 0, size: 200);
+    _album = albums.first;
+    _currentPage = 0;
+    _hasMore = true;
+    final assets = await _album!.getAssetListPaged(
+        page: 0, size: _pageSize);
     if (mounted) setState(() => _assets = assets);
   }
 
@@ -68,8 +89,27 @@ class _GalleryScreenState extends State<GalleryScreen> {
       return;
     }
 
-    final assets = await albums.first.getAssetListPaged(page: 0, size: 200);
+    _album = albums.first;
+    final assets = await _album!.getAssetListPaged(
+        page: 0, size: _pageSize);
+    _currentPage = 0;
+    _hasMore = assets.length >= _pageSize;
     if (mounted) setState(() { _assets = assets; _isLoading = false; });
+  }
+
+  Future<void> _loadMorePhotos() async {
+    if (_isLoadingMore || !_hasMore || _album == null) return;
+    setState(() => _isLoadingMore = true);
+    final nextPage = _currentPage + 1;
+    final more = await _album!.getAssetListPaged(
+        page: nextPage, size: _pageSize);
+    if (!mounted) return;
+    setState(() {
+      _assets = [..._assets, ...more];
+      _currentPage = nextPage;
+      _hasMore = more.length >= _pageSize;
+      _isLoadingMore = false;
+    });
   }
 
   Future<void> _selectAsset(AssetEntity asset) async {
@@ -341,30 +381,56 @@ class _GalleryScreenState extends State<GalleryScreen> {
   // ── 3컬럼 그리드 ──────────────────────────────────────────────────────────
 
   Widget _buildGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.only(bottom: 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-      ),
-      itemCount: _assets.length,
-      itemBuilder: (context, index) {
-        final asset = _assets[index];
-        final isSelected = _selectedIds.contains(asset.id);
-        return _AssetThumbnail(
-          key: ValueKey(asset.id),
-          asset: asset,
-          isSelected: isSelected,
-          isMultiSelectMode: _isMultiSelectMode,
-          onTap: () => _selectAsset(asset),
-          onLongPress: () async {
-            final file = await asset.file;
-            if (file == null || !mounted) return;
-            await Share.shareXFiles([XFile(file.path)]);
-          },
-        );
-      },
+    return CustomScrollView(
+      controller: _scroll,
+      slivers: [
+        SliverGrid(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final asset = _assets[index];
+              final isSelected = _selectedIds.contains(asset.id);
+              return _AssetThumbnail(
+                key: ValueKey(asset.id),
+                asset: asset,
+                isSelected: isSelected,
+                isMultiSelectMode: _isMultiSelectMode,
+                onTap: () => _selectAsset(asset),
+                onLongPress: () async {
+                  final file = await asset.file;
+                  if (file == null || !mounted) return;
+                  await Share.shareXFiles([XFile(file.path)]);
+                },
+              );
+            },
+            childCount: _assets.length,
+          ),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 2,
+            crossAxisSpacing: 2,
+          ),
+        ),
+
+        // 페이지네이션 로딩 인디케이터
+        if (_isLoadingMore)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation(AppColors.silver),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // 바닥 여백
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+      ],
     );
   }
 }

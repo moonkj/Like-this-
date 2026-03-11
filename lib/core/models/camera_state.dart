@@ -13,6 +13,9 @@ enum CameraStatus {
 /// 카메라 렌즈 방향
 enum CameraLens { front, back }
 
+/// 플래시 모드
+enum FlashMode { off, on, auto }
+
 /// 카메라 전체 상태 모델
 class CameraState {
   const CameraState({
@@ -26,6 +29,10 @@ class CameraState {
     this.grain = 20.0,
     this.lightLeak = 0.0,
     this.vignette = 15.0,
+    this.dust = 0.0,
+    this.bloom = 0.0,
+    this.flashMode = FlashMode.off,
+    this.zoom = 1.0,
     this.errorMessage,
   });
 
@@ -52,6 +59,18 @@ class CameraState {
   /// 비네팅 강도 (0 ~ 100)
   final double vignette;
 
+  /// 먼지 텍스처 강도 (0 ~ 100) — Film Dust 전용
+  final double dust;
+
+  /// 하이라이트 번짐 강도 (0 ~ 100) — Silver Glow 전용
+  final double bloom;
+
+  /// 플래시 모드
+  final FlashMode flashMode;
+
+  /// 현재 줌 배율 (1.0 ~ 8.0)
+  final double zoom;
+
   final String? errorMessage;
 
   bool get isReady => status == CameraStatus.ready;
@@ -69,6 +88,10 @@ class CameraState {
     double? grain,
     double? lightLeak,
     double? vignette,
+    double? dust,
+    double? bloom,
+    FlashMode? flashMode,
+    double? zoom,
     String? errorMessage,
   }) => CameraState(
     status: status ?? this.status,
@@ -81,6 +104,10 @@ class CameraState {
     grain: grain ?? this.grain,
     lightLeak: lightLeak ?? this.lightLeak,
     vignette: vignette ?? this.vignette,
+    dust: dust ?? this.dust,
+    bloom: bloom ?? this.bloom,
+    flashMode: flashMode ?? this.flashMode,
+    zoom: zoom ?? this.zoom,
     errorMessage: errorMessage ?? this.errorMessage,
   );
 }

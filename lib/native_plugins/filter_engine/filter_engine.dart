@@ -15,8 +15,7 @@ class FilterEngine {
   }
 
   /// 필터 적용 파라미터 업데이트
-  /// [lutIntensity] 0.0~1.0, [grain] 0~100, [contrast] -100~100
-  /// [exposure] -100~100, [lightLeak] 0~100, [vignette] 0~100
+  /// [lutIntensity] 0.0~1.0, [grain/vignette/lightLeak/dust/bloom] 0~100, [contrast/exposure] -100~100
   static Future<void> updateParams({
     required double lutIntensity,
     required double grain,
@@ -24,6 +23,8 @@ class FilterEngine {
     required double exposure,
     required double lightLeak,
     required double vignette,
+    double dust = 0.0,
+    double bloom = 0.0,
   }) async {
     await _channel.invokeMethod<void>('updateParams', {
       'lutIntensity': lutIntensity,
@@ -32,6 +33,8 @@ class FilterEngine {
       'exposure':     exposure / 100.0,
       'lightLeak':    lightLeak / 100.0,
       'vignette':     vignette / 100.0,
+      'dust':         dust / 100.0,
+      'bloom':        bloom / 100.0,
     });
   }
 

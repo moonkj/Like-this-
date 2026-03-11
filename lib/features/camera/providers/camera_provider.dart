@@ -76,10 +76,13 @@ class CameraNotifier extends StateNotifier<CameraState> {
 
   Future<void> setFilter(FilterModel filter) async {
     state = state.copyWith(
-      activeFilter: filter,
+      activeFilter:  filter,
       filterIntensity: filter.defaultIntensity,
-      grain: filter.defaultGrain,
-      vignette: filter.defaultVignette,
+      grain:         filter.defaultGrain,
+      vignette:      filter.defaultVignette,
+      lightLeak:     filter.defaultLightLeak,
+      dust:          filter.defaultDust,
+      bloom:         filter.defaultBloom,
     );
     await _loadActiveFilter();
     await _syncFilterParams();
@@ -100,6 +103,16 @@ class CameraNotifier extends StateNotifier<CameraState> {
     _syncFilterParams();
   }
 
+  void setDust(double value) {
+    state = state.copyWith(dust: value.clamp(0.0, 100.0));
+    _syncFilterParams();
+  }
+
+  void setBloom(double value) {
+    state = state.copyWith(bloom: value.clamp(0.0, 100.0));
+    _syncFilterParams();
+  }
+
   void setFilterIntensity(double value) {
     state = state.copyWith(filterIntensity: value.clamp(0.0, 1.0));
     _syncFilterParams();
@@ -111,6 +124,21 @@ class CameraNotifier extends StateNotifier<CameraState> {
     await CameraEngine.flipCamera();
     final newLens = state.lens == CameraLens.back ? CameraLens.front : CameraLens.back;
     state = state.copyWith(lens: newLens);
+  }
+
+  Future<void> setFlashMode(FlashMode mode) async {
+    state = state.copyWith(flashMode: mode);
+    await CameraEngine.setFlash(mode.name); // 'off' | 'on' | 'auto'
+  }
+
+  Future<void> setZoom(double zoom) async {
+    final clamped = zoom.clamp(1.0, 8.0);
+    state = state.copyWith(zoom: clamped);
+    await CameraEngine.setZoom(clamped);
+  }
+
+  Future<void> setCompareMode(bool enable) async {
+    await CameraEngine.setCompareMode(enable);
   }
 
   Future<String?> capturePhoto() async {
@@ -132,6 +160,28 @@ class CameraNotifier extends StateNotifier<CameraState> {
     }
   }
 
+  Future<void> toggleRecording() async {
+    if (state.isRecording) {
+      state = state.copyWith(status: CameraStatus.capturing);
+      try {
+        final path = await CameraEngine.stopRecording();
+        state = state.copyWith(status: CameraStatus.ready);
+        if (path != null) {
+          await PhotoManager.editor.saveImageWithPath(
+            path,
+            title: 'LikeThis_video_${DateTime.now().millisecondsSinceEpoch}',
+          );
+        }
+      } catch (_) {
+        state = state.copyWith(status: CameraStatus.ready);
+      }
+    } else {
+      if (!state.isReady) return;
+      await CameraEngine.startRecording();
+      state = state.copyWith(status: CameraStatus.recording);
+    }
+  }
+
   // ── Private ──────────────────────────────────────────────────────────────────
 
   Future<void> _loadActiveFilter() async {
@@ -147,6 +197,8 @@ class CameraNotifier extends StateNotifier<CameraState> {
       exposure:     state.exposure,
       lightLeak:    state.lightLeak,
       vignette:     state.vignette,
+      dust:         state.dust,
+      bloom:        state.bloom,
     );
   }
 }

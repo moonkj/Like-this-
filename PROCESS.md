@@ -273,6 +273,71 @@
 
 ---
 
+## Sprint 10 — 미구현 기능 전면 구현 & 버그 수정 (2026-03-11)
+
+### ✅ 완료
+
+#### Sprint 10-1: 플래시 / 타이머 기능
+- [x] `FlashMode` enum (off/on/auto) — `camera_state.dart`
+- [x] `CameraEngine.setFlash(mode)` MethodChannel 브릿지
+- [x] `CameraNotifier.setFlashMode()` — 상태 변경 + 네이티브 동기화
+- [x] 카메라 상단 플래시 버튼: flash_off / flash_on / flash_auto 아이콘 순환
+- [x] 타이머 버튼: 0→3→5→10초 순환, 촬영 시 카운트다운 오버레이 (중앙 대형 숫자)
+- [x] 카운트다운 중 셔터 비활성화
+
+#### Sprint 10-2: 비교 모드 (Compare)
+- [x] `CameraEngine.setCompareMode(enable)` MethodChannel
+- [x] `CameraNotifier.setCompareMode()` 추가
+- [x] iOS `bwEngine.setCompareMode(_)` Swift 연동
+- [x] Android `session?.setCompareMode(enable)` Kotlin 연동
+- [x] 우측 비교 버튼 long-press → 원본 화면 표시, 손 뗌 → 필터 복귀
+- [x] "ORIGINAL" 뱃지 오버레이 표시
+
+#### Sprint 10-3: 동영상 모드
+- [x] `CameraEngine.startRecording()` / `stopRecording()` MethodChannel
+- [x] `CameraNotifier.toggleRecording()` — 녹화 시작/종료, 저장
+- [x] `_VideoShutterButton` — 빨간 원형, 녹화 중 정지(◼) 아이콘
+- [x] `_RecordingBadge` — AnimationController repeat(reverse:true) 블링크 REC 뱃지
+
+#### Sprint 10-4: 핀치 줌
+- [x] `CameraState.zoom` (1.0~8.0) + `CameraNotifier.setZoom()`
+- [x] `onScaleStart/Update/End` 통합 제스처 (기존 수직/수평 드래그와 공존)
+- [x] `_ZoomBadge` — "1.0×" 형식으로 1.5초 후 자동 숨김
+- [x] `CameraEngine.setZoom()` 네이티브 연결
+
+#### Sprint 10-5: 에디터 저장 기능
+- [x] `RepaintBoundary` + `RenderRepaintBoundary.toImage()` → PNG 저장
+- [x] `PhotoManager.editor.saveImageWithPath()` 갤러리 저장
+- [x] 저장 중 CircularProgressIndicator 표시
+
+#### Sprint 10-6: 설정 화면 UserPreferences 연결
+- [x] `preferences_service.dart` 신규 — JSON 영속화 (path_provider)
+- [x] `preferencesProvider` (Riverpod StateNotifier)
+- [x] 설정 화면 스위치 → saveToGallery / hapticEnabled 실시간 반영
+- [x] "통계" 섹션 — 총 촬영 수 표시
+
+#### Sprint 10-7: 갤러리 페이지네이션
+- [x] 60장 단위 페이지 로드 (`_pageSize = 60`)
+- [x] ScrollController 하단 400px 이전 트리거 → `_loadMorePhotos()`
+- [x] SliverGrid + SliverToBoxAdapter 로딩 인디케이터
+
+#### Sprint 10-8: dust / bloom 효과 파이프라인
+- [x] `CameraState.dust` / `bloom` 필드 (0~100)
+- [x] `FilterModel.defaultDust` / `defaultBloom` (Film Dust: 40.0, Silver Glow: 30.0)
+- [x] `FilterEngine.updateParams` dust/bloom 파라미터 추가
+- [x] `CameraNotifier._syncFilterParams()` dust/bloom 전달
+- [x] iOS `CameraEnginePlugin.swift` updateParams에 dust/bloom 처리
+- [x] Android `CameraEnginePlugin.kt` updateParams에 dust/bloom 처리, `BWRenderParams` 필드 추가
+
+#### Sprint 10-9: iOS 네이티브 추가 핸들러
+- [x] `CameraEnginePlugin.swift` — setFlash / startRecording / stopRecording / setCompareMode 케이스 추가
+
+#### Sprint 10-10: Android 네이티브 추가 핸들러
+- [x] `CameraEnginePlugin.kt` — setFlash / startRecording / stopRecording / setCompareMode 케이스 추가
+- [x] `MFCameraSession` stub에 동일 4개 메서드 추가
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용

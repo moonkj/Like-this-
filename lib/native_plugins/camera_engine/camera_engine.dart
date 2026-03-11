@@ -49,4 +49,24 @@ class CameraEngine {
   static Future<void> setZoom(double zoom) async {
     await _channel.invokeMethod<void>('setZoom', {'zoom': zoom});
   }
+
+  /// 플래시 모드 설정 ('off' | 'on' | 'auto')
+  static Future<void> setFlash(String mode) async {
+    await _channel.invokeMethod<void>('setFlash', {'mode': mode});
+  }
+
+  /// 동영상 녹화 시작 → 임시 파일 경로 반환 (녹화 완료 시)
+  static Future<void> startRecording() async {
+    await _channel.invokeMethod<void>('startRecording');
+  }
+
+  /// 동영상 녹화 중지 → 저장된 파일 경로 반환
+  static Future<String?> stopRecording() async {
+    return _channel.invokeMethod<String>('stopRecording');
+  }
+
+  /// 비교 모드 — true: 원본 프리뷰, false: 필터 적용 프리뷰
+  static Future<void> setCompareMode(bool enable) async {
+    await _channel.invokeMethod<void>('setCompareMode', {'enable': enable});
+  }
 }

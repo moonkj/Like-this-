@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_typography.dart';
 import '../../../core/constants/app_dimensions.dart';
+import '../../../core/services/preferences_service.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(preferencesProvider);
+    final notifier = ref.read(preferencesProvider.notifier);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -30,8 +35,8 @@ class SettingsScreen extends StatelessWidget {
                 icon: Icons.save_alt_outlined,
                 label: '갤러리 자동 저장',
                 trailing: Switch(
-                  value: true,
-                  onChanged: (_) {},
+                  value: prefs.saveToGallery,
+                  onChanged: (v) => notifier.setSaveToGallery(v),
                   activeColor: AppColors.silver,
                   inactiveTrackColor: AppColors.border,
                 ),
@@ -40,10 +45,24 @@ class SettingsScreen extends StatelessWidget {
                 icon: Icons.vibration,
                 label: '햅틱 피드백',
                 trailing: Switch(
-                  value: true,
-                  onChanged: (_) {},
+                  value: prefs.hapticEnabled,
+                  onChanged: (v) => notifier.setHapticEnabled(v),
                   activeColor: AppColors.silver,
                   inactiveTrackColor: AppColors.border,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spaceL),
+          _SettingsSection(
+            title: '통계',
+            items: [
+              _SettingsItem(
+                icon: Icons.photo_camera_outlined,
+                label: '총 촬영 수',
+                trailing: Text(
+                  '${prefs.totalPhotosCaptured}장',
+                  style: AppTypography.bodySmall,
                 ),
               ),
             ],

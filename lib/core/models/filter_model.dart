@@ -25,6 +25,9 @@ class FilterModel {
     this.defaultIntensity = 1.0,
     this.defaultGrain = 20.0,
     this.defaultVignette = 15.0,
+    this.defaultLightLeak = 0.0,
+    this.defaultDust = 0.0,
+    this.defaultBloom = 0.0,
     this.enabledEffects = const [],
     this.fallbackColor = const Color(0xFF1A1A1A),
     this.isFavorite = false,
@@ -37,6 +40,9 @@ class FilterModel {
   final double defaultIntensity;    // 0.0 ~ 1.0
   final double defaultGrain;        // 0 ~ 100
   final double defaultVignette;     // 0 ~ 100
+  final double defaultLightLeak;    // 0 ~ 100
+  final double defaultDust;         // 0 ~ 100 — Film Dust 전용
+  final double defaultBloom;        // 0 ~ 100 — Silver Glow 전용
   final List<BWEffectType> enabledEffects;
   final Color fallbackColor;        // 썸네일 없을 때 배경색
   final bool isFavorite;
@@ -52,6 +58,9 @@ class FilterModel {
     defaultIntensity: defaultIntensity ?? this.defaultIntensity,
     defaultGrain: defaultGrain,
     defaultVignette: defaultVignette,
+    defaultLightLeak: defaultLightLeak,
+    defaultDust: defaultDust,
+    defaultBloom: defaultBloom,
     enabledEffects: enabledEffects,
     fallbackColor: fallbackColor,
     isFavorite: isFavorite ?? this.isFavorite,
@@ -123,6 +132,7 @@ abstract final class BWFilters {
     defaultIntensity: 0.8,
     defaultGrain: 50.0,
     defaultVignette: 25.0,
+    defaultDust: 40.0,
     enabledEffects: [BWEffectType.grain, BWEffectType.dust],
     fallbackColor: Color(0xFF1E1E1E),
   );
@@ -135,6 +145,7 @@ abstract final class BWFilters {
     defaultIntensity: 0.8,
     defaultGrain: 8.0,
     defaultVignette: 10.0,
+    defaultBloom: 30.0,
     enabledEffects: [BWEffectType.bloom],
     fallbackColor: Color(0xFF303030),
   );

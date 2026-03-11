@@ -61,6 +61,26 @@ final class LikeThisCamera: NSObject {
                 let zoom = (call.arguments as? [String: Any])?["zoom"] as? Double ?? 1.0
                 self.cameraSession?.setZoom(Float(zoom))
                 result(nil)
+
+            // ── 플래시 ──────────────────────────────────────────────────────
+            case "setFlash":
+                let mode = (call.arguments as? [String: Any])?["mode"] as? String ?? "off"
+                self.cameraSession?.setFlash(mode: mode)
+                result(nil)
+
+            // ── 동영상 녹화 ─────────────────────────────────────────────────
+            case "startRecording":
+                self.cameraSession?.startRecording()
+                result(nil)
+            case "stopRecording":
+                self.cameraSession?.stopRecording { path in result(path) }
+
+            // ── 비교 모드 ───────────────────────────────────────────────────
+            case "setCompareMode":
+                let enable = (call.arguments as? [String: Any])?["enable"] as? Bool ?? false
+                self.bwEngine.setCompareMode(enable)
+                result(nil)
+
             default:
                 result(FlutterMethodNotImplemented)
             }
@@ -82,9 +102,12 @@ final class LikeThisCamera: NSObject {
                 let exposure     = Float((args?["exposure"]     as? Double) ?? 0.0)
                 let lightLeak    = Float((args?["lightLeak"]    as? Double) ?? 0.0)
                 let vignette     = Float((args?["vignette"]     as? Double) ?? 0.0)
+                let dust         = Float((args?["dust"]         as? Double) ?? 0.0)
+                let bloom        = Float((args?["bloom"]        as? Double) ?? 0.0)
                 self.bwEngine.updateParams(
                     lutIntensity: lutIntensity, grain: grain, contrast: contrast,
-                    exposure: exposure, lightLeak: lightLeak, vignette: vignette
+                    exposure: exposure, lightLeak: lightLeak, vignette: vignette,
+                    dust: dust, bloom: bloom
                 )
                 result(nil)
             default:
