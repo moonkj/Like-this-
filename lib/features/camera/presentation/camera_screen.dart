@@ -375,15 +375,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 overlayColor: AppColors.silver.withValues(alpha: 0.15),
               ),
               child: Slider(
-                value: camState.activeFilter.defaultIntensity,
-                onChanged: (v) {},
+                value: camState.filterIntensity,
+                onChanged: (v) => ref.read(cameraProvider.notifier).setFilterIntensity(v),
               ),
             ),
           ),
           SizedBox(
             width: 36,
             child: Text(
-              '${(camState.activeFilter.defaultIntensity * 100).round()}',
+              '${(camState.filterIntensity * 100).round()}',
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: AppColors.textSecondary, fontSize: 11),

@@ -233,6 +233,35 @@
 
 ---
 
+## Sprint 8 — 필터 엔진 버그 수정 & 사진 저장 (2026-03-11)
+
+### ✅ 완료
+
+#### Sprint 8-1: 필터 파이프라인 버그 전면 수정
+- [x] `loadLUT` 키 불일치 수정: Dart `assetPath` ↔ Swift `path` → `assetPath`로 통일
+- [x] grain/vignette 값 정규화 체크 수정: `> 1.0` → `> 0.01` (Dart가 /100 정규화 후 전송)
+- [x] 효과 강도 계산 이중 정규화 제거: `/ 100.0 * 2.5` → `* 2.5`, `/ 100.0 * 0.18` → `* 0.18`
+- [x] 노출/대비 스케일 수정: `/ 500.0` → `* 0.5`, `/ 200.0` → `* 0.5`
+
+#### Sprint 8-2: 필터 강도 슬라이더 연결
+- [x] `CameraState.filterIntensity` 필드 추가 (0.0~1.0)
+- [x] `CameraNotifier.setFilterIntensity()` 메서드 추가
+- [x] `FilterEngine.updateParams` → `lutIntensity: state.filterIntensity` 연결
+- [x] iOS `MFBWEngine`: `CIDissolveTransition`으로 B&W ↔ 필터 블렌딩 (lutIntensity 기반)
+- [x] 카메라 화면 슬라이더 `onChanged` → `setFilterIntensity()` 연결
+
+#### Sprint 8-3: 사진 촬영 저장
+- [x] `capturePhoto()` 후 `PhotoManager.editor.saveImageWithPath()` 갤러리 저장
+- [x] iOS `photoOutput` 에서 B&W 엔진 적용 후 JPEG 저장 (`bwEngine.buildImage(from ciImage:)`)
+- [x] `MFBWEngine.buildImage(from:)` CIImage 오버로드 추가 (캡처용)
+
+#### Sprint 8-4: 초기 실행 검은 화면 버그 수정
+- [x] `MFBWEngine` 초기값 raw(10.0/15.0) → 정규화(0.0)으로 수정 (37.5 강도 비네팅 방지)
+- [x] `CameraEnginePlugin` updateParams 기본값 정규화 (10.0→0.0, 15.0→0.0)
+- [x] `initialize()` 시 `_syncFilterParams()` 호출 추가 (필터 파라미터 즉시 적용)
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용

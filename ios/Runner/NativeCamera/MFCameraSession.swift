@@ -2,28 +2,34 @@ import AVFoundation
 import Flutter
 import UIKit
 
-/// Like This 카메라 세션 — AVFoundation 실제 구현
+/// Like This 카메라 세션 — B&W 엔진 파이프라인 통합
 final class MFCameraSession: NSObject {
 
     private let captureSession = AVCaptureSession()
-    private let videoOutput = AVCaptureVideoDataOutput()
-    private let photoOutput = AVCapturePhotoOutput()
-    private let sessionQueue = DispatchQueue(label: "com.likethis.camera.session", qos: .userInteractive)
+    private let videoOutput    = AVCaptureVideoDataOutput()
+    private let photoOutput    = AVCapturePhotoOutput()
+    private let sessionQueue   = DispatchQueue(label: "com.likethis.camera.session", qos: .userInteractive)
 
     private var currentDevice: AVCaptureDevice?
     private var isFront: Bool
 
-    private let bwEngine: MFBWEngine
+    let bwEngine: MFBWEngine
     private let textureRegistry: FlutterTextureRegistry
     private var registeredTextureId: Int64 = -1
-    private var latestPixelBuffer: CVPixelBuffer?
+
+    // 처리된 CIImage (sessionQueue 생산 / Flutter texture 소비)
+    private let imageLock = NSLock()
+    private var latestProcessedImage: CIImage?
+
+    // 출력 CVPixelBuffer 풀
+    private var outputBufferPool: CVPixelBufferPool?
 
     private var photoCaptureCompletion: ((String?) -> Void)?
 
     init(bwEngine: MFBWEngine, registry: Any, frontCamera: Bool) {
-        self.bwEngine = bwEngine
+        self.bwEngine       = bwEngine
         self.textureRegistry = registry as! FlutterTextureRegistry
-        self.isFront = frontCamera
+        self.isFront        = frontCamera
         super.init()
     }
 
@@ -53,32 +59,21 @@ final class MFCameraSession: NSObject {
         }
     }
 
-    func pause() {
-        sessionQueue.async { [weak self] in
-            self?.captureSession.stopRunning()
-        }
-    }
-
-    func resume() {
-        sessionQueue.async { [weak self] in
-            self?.captureSession.startRunning()
-        }
-    }
+    func pause() { sessionQueue.async { [weak self] in self?.captureSession.stopRunning() } }
+    func resume() { sessionQueue.async { [weak self] in self?.captureSession.startRunning() } }
 
     func flipCamera() {
         isFront.toggle()
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             self.captureSession.beginConfiguration()
-            for input in self.captureSession.inputs {
-                self.captureSession.removeInput(input)
-            }
-            let position: AVCaptureDevice.Position = self.isFront ? .front : .back
-            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
-               let input = try? AVCaptureDeviceInput(device: device),
-               self.captureSession.canAddInput(input) {
-                self.captureSession.addInput(input)
-                self.currentDevice = device
+            self.captureSession.inputs.forEach { self.captureSession.removeInput($0) }
+            let pos: AVCaptureDevice.Position = self.isFront ? .front : .back
+            if let dev = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: pos),
+               let inp = try? AVCaptureDeviceInput(device: dev),
+               self.captureSession.canAddInput(inp) {
+                self.captureSession.addInput(inp)
+                self.currentDevice = dev
             }
             self.fixVideoOrientation()
             self.captureSession.commitConfiguration()
@@ -86,22 +81,20 @@ final class MFCameraSession: NSObject {
     }
 
     func setExposure(_ ev: Float) {
-        guard let device = currentDevice else { return }
-        let lo = device.minExposureTargetBias
-        let hi = device.maxExposureTargetBias
-        let clamped = min(max(ev, lo), hi)
-        try? device.lockForConfiguration()
-        device.setExposureTargetBias(clamped, completionHandler: nil)
-        device.unlockForConfiguration()
+        guard let dev = currentDevice else { return }
+        let clamped = min(max(ev, dev.minExposureTargetBias), dev.maxExposureTargetBias)
+        try? dev.lockForConfiguration()
+        dev.setExposureTargetBias(clamped, completionHandler: nil)
+        dev.unlockForConfiguration()
     }
 
     func setZoom(_ zoom: Float) {
-        guard let device = currentDevice else { return }
-        let maxZoom = min(device.activeFormat.videoMaxZoomFactor, 6.0)
-        let clamped = min(max(CGFloat(zoom), 1.0), maxZoom)
-        try? device.lockForConfiguration()
-        device.videoZoomFactor = clamped
-        device.unlockForConfiguration()
+        guard let dev = currentDevice else { return }
+        let maxZ = min(dev.activeFormat.videoMaxZoomFactor, 6.0)
+        let z = min(max(CGFloat(zoom), 1.0), maxZ)
+        try? dev.lockForConfiguration()
+        dev.videoZoomFactor = z
+        dev.unlockForConfiguration()
     }
 
     func capturePhoto(completion: @escaping (String?) -> Void) {
@@ -110,51 +103,48 @@ final class MFCameraSession: NSObject {
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 
-    // MARK: - Private
+    // MARK: - Private Setup
 
     private func setupSession() {
         captureSession.beginConfiguration()
         captureSession.sessionPreset = .photo
 
-        let position: AVCaptureDevice.Position = isFront ? .front : .back
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
-              let input = try? AVCaptureDeviceInput(device: device) else {
-            captureSession.commitConfiguration()
-            return
+        let pos: AVCaptureDevice.Position = isFront ? .front : .back
+        guard let dev = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: pos),
+              let inp = try? AVCaptureDeviceInput(device: dev) else {
+            captureSession.commitConfiguration(); return
         }
+        currentDevice = dev
+        if captureSession.canAddInput(inp)         { captureSession.addInput(inp) }
 
-        currentDevice = device
-
-        if captureSession.canAddInput(input) {
-            captureSession.addInput(input)
-        }
-
-        videoOutput.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-        ]
+        videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         videoOutput.setSampleBufferDelegate(self, queue: sessionQueue)
         videoOutput.alwaysDiscardsLateVideoFrames = true
-
-        if captureSession.canAddOutput(videoOutput) {
-            captureSession.addOutput(videoOutput)
-        }
-
-        if captureSession.canAddOutput(photoOutput) {
-            captureSession.addOutput(photoOutput)
-        }
+        if captureSession.canAddOutput(videoOutput) { captureSession.addOutput(videoOutput) }
+        if captureSession.canAddOutput(photoOutput) { captureSession.addOutput(photoOutput) }
 
         fixVideoOrientation()
         captureSession.commitConfiguration()
     }
 
     private func fixVideoOrientation() {
-        guard let connection = videoOutput.connection(with: .video) else { return }
-        if connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
-        }
-        if connection.isVideoMirroringSupported {
-            connection.isVideoMirrored = isFront
-        }
+        guard let conn = videoOutput.connection(with: .video) else { return }
+        if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
+        if conn.isVideoMirroringSupported   { conn.isVideoMirrored = isFront }
+    }
+
+    /// 첫 프레임 도착 시 출력 버퍼 풀 생성
+    private func makeOutputPool(matching pixelBuffer: CVPixelBuffer) {
+        guard outputBufferPool == nil else { return }
+        let w = CVPixelBufferGetWidth(pixelBuffer)
+        let h = CVPixelBufferGetHeight(pixelBuffer)
+        let attrs: NSDictionary = [
+            kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey:  w,
+            kCVPixelBufferHeightKey: h,
+            kCVPixelBufferIOSurfacePropertiesKey: [:],
+        ]
+        CVPixelBufferPoolCreate(nil, nil, attrs, &outputBufferPool)
     }
 }
 
@@ -162,8 +152,16 @@ final class MFCameraSession: NSObject {
 
 extension MFCameraSession: FlutterTexture {
     func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
-        guard let buffer = latestPixelBuffer else { return nil }
-        return Unmanaged.passRetained(buffer)
+        imageLock.lock()
+        let image = latestProcessedImage
+        imageLock.unlock()
+        guard let ciImage = image, let pool = outputBufferPool else { return nil }
+
+        var outBuffer: CVPixelBuffer?
+        guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &outBuffer) == kCVReturnSuccess,
+              let buf = outBuffer else { return nil }
+        bwEngine.render(ciImage, to: buf)
+        return Unmanaged.passRetained(buf)
     }
 }
 
@@ -173,8 +171,12 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput,
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        latestPixelBuffer = pixelBuffer
+        guard let rawBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        makeOutputPool(matching: rawBuffer)
+        let processed = bwEngine.buildImage(from: rawBuffer)
+        imageLock.lock()
+        latestProcessedImage = processed
+        imageLock.unlock()
         if registeredTextureId >= 0 {
             textureRegistry.textureFrameAvailable(registeredTextureId)
         }
@@ -188,14 +190,25 @@ extension MFCameraSession: AVCapturePhotoCaptureDelegate {
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
         defer { photoCaptureCompletion = nil }
-        guard error == nil, let data = photo.fileDataRepresentation() else {
-            photoCaptureCompletion?(nil)
-            return
+        guard error == nil, let data = photo.fileDataRepresentation(),
+              let ciInput = CIImage(data: data) else {
+            photoCaptureCompletion?(nil); return
         }
-        let filename = UUID().uuidString + ".jpg"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+
+        // B&W 엔진 적용
+        let processed = bwEngine.buildImage(from: ciInput)
+        guard let cgImage = bwEngine.context.createCGImage(processed, from: processed.extent) else {
+            photoCaptureCompletion?(nil); return
+        }
+        let uiImage = UIImage(cgImage: cgImage)
+        guard let jpegData = uiImage.jpegData(compressionQuality: 0.95) else {
+            photoCaptureCompletion?(nil); return
+        }
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".jpg")
         do {
-            try data.write(to: url)
+            try jpegData.write(to: url)
             photoCaptureCompletion?(url.path)
         } catch {
             photoCaptureCompletion?(nil)

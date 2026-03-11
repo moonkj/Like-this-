@@ -66,8 +66,30 @@ final class LikeThisCamera: NSObject {
             }
         }
 
-        filterChannel.setMethodCallHandler { call, result in
-            result(nil)
+        filterChannel.setMethodCallHandler { [weak self] call, result in
+            guard let self = self else { return }
+            let args = call.arguments as? [String: Any]
+            switch call.method {
+            case "loadLUT":
+                if let path = args?["assetPath"] as? String {
+                    self.bwEngine.loadLUT(assetPath: path)
+                }
+                result(nil)
+            case "updateParams":
+                let lutIntensity = Float((args?["lutIntensity"] as? Double) ?? 1.0)
+                let grain        = Float((args?["grain"]        as? Double) ?? 0.0)
+                let contrast     = Float((args?["contrast"]     as? Double) ?? 0.0)
+                let exposure     = Float((args?["exposure"]     as? Double) ?? 0.0)
+                let lightLeak    = Float((args?["lightLeak"]    as? Double) ?? 0.0)
+                let vignette     = Float((args?["vignette"]     as? Double) ?? 0.0)
+                self.bwEngine.updateParams(
+                    lutIntensity: lutIntensity, grain: grain, contrast: contrast,
+                    exposure: exposure, lightLeak: lightLeak, vignette: vignette
+                )
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
         }
     }
 }

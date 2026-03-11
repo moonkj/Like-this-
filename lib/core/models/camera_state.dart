@@ -20,6 +20,7 @@ class CameraState {
     this.lens = CameraLens.back,
     this.textureId,
     this.activeFilter = BWFilters.pureThis,
+    this.filterIntensity = 1.0,
     this.exposure = 0.0,
     this.contrast = 0.0,
     this.grain = 20.0,
@@ -32,6 +33,9 @@ class CameraState {
   final CameraLens lens;
   final int? textureId;
   final FilterModel activeFilter;
+
+  /// 필터 강도 슬라이더 (0.0 ~ 1.0)
+  final double filterIntensity;
 
   /// 수직 스와이프로 조절 (-100 ~ +100)
   final double exposure;
@@ -59,6 +63,7 @@ class CameraState {
     CameraLens? lens,
     int? textureId,
     FilterModel? activeFilter,
+    double? filterIntensity,
     double? exposure,
     double? contrast,
     double? grain,
@@ -70,6 +75,7 @@ class CameraState {
     lens: lens ?? this.lens,
     textureId: textureId ?? this.textureId,
     activeFilter: activeFilter ?? this.activeFilter,
+    filterIntensity: filterIntensity ?? this.filterIntensity,
     exposure: exposure ?? this.exposure,
     contrast: contrast ?? this.contrast,
     grain: grain ?? this.grain,

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../../../core/models/camera_state.dart';
 import '../../../core/models/filter_model.dart';
 import '../../../native_plugins/camera_engine/camera_engine.dart';
@@ -21,6 +22,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
         frontCamera: state.lens == CameraLens.front,
       );
       await _loadActiveFilter();
+      await _syncFilterParams();
       state = state.copyWith(
         status: CameraStatus.ready,
         textureId: textureId,
@@ -75,6 +77,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
   Future<void> setFilter(FilterModel filter) async {
     state = state.copyWith(
       activeFilter: filter,
+      filterIntensity: filter.defaultIntensity,
       grain: filter.defaultGrain,
       vignette: filter.defaultVignette,
     );
@@ -97,6 +100,11 @@ class CameraNotifier extends StateNotifier<CameraState> {
     _syncFilterParams();
   }
 
+  void setFilterIntensity(double value) {
+    state = state.copyWith(filterIntensity: value.clamp(0.0, 1.0));
+    _syncFilterParams();
+  }
+
   // ── 카메라 제어 ─────────────────────────────────────────────────────────────
 
   Future<void> flipCamera() async {
@@ -111,6 +119,12 @@ class CameraNotifier extends StateNotifier<CameraState> {
     try {
       final path = await CameraEngine.capturePhoto();
       state = state.copyWith(status: CameraStatus.ready);
+      if (path != null) {
+        await PhotoManager.editor.saveImageWithPath(
+          path,
+          title: 'LikeThis_${DateTime.now().millisecondsSinceEpoch}',
+        );
+      }
       return path;
     } catch (e) {
       state = state.copyWith(status: CameraStatus.ready);
@@ -127,7 +141,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
 
   Future<void> _syncFilterParams() async {
     await FilterEngine.updateParams(
-      lutIntensity: state.activeFilter.defaultIntensity,
+      lutIntensity: state.filterIntensity,
       grain:        state.grain,
       contrast:     state.contrast,
       exposure:     state.exposure,
