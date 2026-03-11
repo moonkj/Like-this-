@@ -84,6 +84,7 @@
 		AA10000000000000000005AA /* FilterEnginePlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "NativeCamera/FilterEnginePlugin.swift"; sourceTree = "<group>"; };
 		AA10000000000000000006AA /* MFVideoRecorder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "NativeCamera/MFVideoRecorder.swift"; sourceTree = "<group>"; };
 		AA10000000000000000007AA /* MFBWEngine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "NativeCamera/MFBWEngine.swift"; sourceTree = "<group>"; };
+		AA10000000000000000008AA /* MFBeautyEngine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "NativeCamera/MFBeautyEngine.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -427,13 +428,13 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
-					AA10000000000000000001BB /* MFLUTEngine.swift in Sources */,
-					AA10000000000000000002BB /* MFCameraSession.swift in Sources */,
-					AA10000000000000000003BB /* MFCameraPreview.swift in Sources */,
-					AA10000000000000000004BB /* CameraEnginePlugin.swift in Sources */,
-					AA10000000000000000005BB /* FilterEnginePlugin.swift in Sources */,
-					AA10000000000000000006BB /* MFVideoRecorder.swift in Sources */,
-					AA10000000000000000007BB /* MFBWEngine.swift in Sources */,
+				AA10000000000000000001BB /* MFLUTEngine.swift in Sources */,
+				AA10000000000000000002BB /* MFCameraSession.swift in Sources */,
+				AA10000000000000000003BB /* MFCameraPreview.swift in Sources */,
+				AA10000000000000000004BB /* CameraEnginePlugin.swift in Sources */,
+				AA10000000000000000005BB /* FilterEnginePlugin.swift in Sources */,
+				AA10000000000000000006BB /* MFVideoRecorder.swift in Sources */,
+				AA10000000000000000007BB /* MFBWEngine.swift in Sources */,
 				AA10000000000000000008BB /* MFBeautyEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

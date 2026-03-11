@@ -191,6 +191,7 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate {
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
         guard let rawBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        bwEngine.detectFaces(in: rawBuffer)
         makeOutputPool(matching: rawBuffer)
         let processed = bwEngine.buildImage(from: rawBuffer)
         imageLock.lock()

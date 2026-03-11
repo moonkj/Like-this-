@@ -141,6 +141,11 @@ class CameraNotifier extends StateNotifier<CameraState> {
     await CameraEngine.setCompareMode(enable);
   }
 
+  Future<void> setBeauty(String mode, double intensity) async {
+    state = state.copyWith(beautyMode: mode, beautyIntensity: intensity);
+    await CameraEngine.setBeauty(mode, intensity);
+  }
+
   Future<String?> capturePhoto() async {
     if (!state.isReady) return null;
     state = state.copyWith(status: CameraStatus.capturing);

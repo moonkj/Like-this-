@@ -50,6 +50,9 @@ final class MFBWEngine {
     private var _dust: Float = 0.0
     private var _bloom: Float = 0.0
     private var _compareMode: Bool = false
+    private var _beautyMode: String = "none"
+    private var _beautyIntensity: Float = 0.0
+    let beautyEngine = MFBeautyEngine()
 
     func updateParams(lutIntensity: Float, grain: Float, contrast: Float,
                       exposure: Float, lightLeak: Float, vignette: Float,
@@ -66,6 +69,15 @@ final class MFBWEngine {
 
     func setCompareMode(_ enabled: Bool) {
         _compareMode = enabled
+    }
+
+    func setBeauty(mode: String, intensity: Float) {
+        _beautyMode = mode
+        _beautyIntensity = intensity
+    }
+
+    func detectFaces(in pixelBuffer: CVPixelBuffer) {
+        beautyEngine.detectFaces(in: pixelBuffer)
     }
 
     /// CIImage 빌드 — 프리뷰용 (CVPixelBuffer)
@@ -88,7 +100,14 @@ final class MFBWEngine {
         let blended = blend(from: bwBase, to: toned, amount: CGFloat(_lutIntensity))
         var image = applyExposureContrast(blended)
         image = applyEffects(image)
+        image = applyBeauty(image)
         return image.cropped(to: input.extent)
+    }
+
+    private func applyBeauty(_ image: CIImage) -> CIImage {
+        guard _beautyIntensity > 0.01,
+              let mode = MFBeautyEngine.BeautyMode(rawValue: _beautyMode) else { return image }
+        return beautyEngine.apply(to: image, mode: mode, intensity: _beautyIntensity)
     }
 
     /// 비교 모드: 왼쪽 절반 = 원본 컬러, 오른쪽 절반 = B&W 필터 적용

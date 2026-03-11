@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import '../../../../core/constants/app_colors.dart';
 
 /// Beauty Mode 효과 패널
-/// Like It 스타일: 모드 탭 + 강도 슬라이더
 enum BeautyMode {
-  soft('Soft', '피부 결 부드럽게'),
-  glow('Glow', '은은한 피부 광채'),
-  silky('Silky', '매끈한 셀카 톤');
+  soft(       'Soft',        '피부 결 부드럽게'),
+  glow(       'Glow',        '은은한 피부 광채'),
+  silky(      'Silky',       '매끈한 셀카 톤'),
+  faceBright( '얼굴 밝기',    '얼굴 영역만 밝게'),
+  shadowLift( '다크서클',     '저명도 대비 완화'),
+  skinFocus(  'Skin Focus',  '배경 어둡게, 얼굴 강조'),
+  softDepth(  'Soft Depth',  '배경 블러, 인물 선명');
 
   const BeautyMode(this.label, this.description);
   final String label;
@@ -21,7 +24,6 @@ class BeautyPanel extends StatefulWidget {
     required this.visible,
   });
 
-  /// (mode, intensity 0.0~1.0) 콜백
   final void Function(BeautyMode mode, double intensity) onChanged;
   final bool visible;
 
@@ -35,7 +37,7 @@ class _BeautyPanelState extends State<BeautyPanel>
   double _intensity = 0.5;
 
   late final AnimationController _anim;
-  late final Animation<double> _slideAnim;
+  late final Animation<double> _fadeAnim;
 
   @override
   void initState() {
@@ -44,8 +46,8 @@ class _BeautyPanelState extends State<BeautyPanel>
       vsync: this,
       duration: const Duration(milliseconds: 280),
     );
-    _slideAnim = CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic);
-    if (widget.visible) _anim.forward();   // 생성 시 visible이면 즉시 시작
+    _fadeAnim = CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic);
+    if (widget.visible) _anim.forward();
   }
 
   @override
@@ -72,31 +74,34 @@ class _BeautyPanelState extends State<BeautyPanel>
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
-      opacity: _slideAnim,
+      opacity: _fadeAnim,
       child: Container(
         color: AppColors.background,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 모드 선택 탭
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: BeautyMode.values.map((mode) {
-                final isSelected = mode == _mode;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: GestureDetector(
+            // 모드 선택 탭 (가로 스크롤)
+            SizedBox(
+              height: 34,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: BeautyMode.values.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final mode = BeautyMode.values[i];
+                  final isSelected = mode == _mode;
+                  return GestureDetector(
                     onTap: () => _selectMode(mode),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 7),
+                          horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppColors.silver.withValues(alpha: 0.15)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(17),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.silver
@@ -110,44 +115,37 @@ class _BeautyPanelState extends State<BeautyPanel>
                           color: isSelected
                               ? AppColors.textPrimary
                               : AppColors.textSecondary,
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: isSelected
                               ? FontWeight.w600
                               : FontWeight.w400,
                         ),
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 10),
-            // 설명
-            Text(
-              _mode.description,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             // 강도 슬라이더
             Row(
               children: [
-                const Icon(Icons.lens_blur, color: AppColors.textSecondary, size: 16),
+                const Icon(Icons.lens_blur,
+                    color: AppColors.textSecondary, size: 15),
                 const SizedBox(width: 8),
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(
                       trackHeight: 2,
-                      thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 7),
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 7),
                       overlayShape:
                           const RoundSliderOverlayShape(overlayRadius: 14),
                       activeTrackColor: AppColors.silver,
                       inactiveTrackColor: AppColors.border,
                       thumbColor: AppColors.white,
-                      overlayColor: AppColors.silver.withValues(alpha: 0.12),
+                      overlayColor:
+                          AppColors.silver.withValues(alpha: 0.12),
                     ),
                     child: Slider(
                       value: _intensity,
@@ -160,13 +158,11 @@ class _BeautyPanelState extends State<BeautyPanel>
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
-                  width: 32,
+                  width: 28,
                   child: Text(
                     '${(_intensity * 100).round()}',
                     style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
+                        color: AppColors.textSecondary, fontSize: 11),
                     textAlign: TextAlign.right,
                   ),
                 ),

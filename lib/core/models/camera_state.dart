@@ -33,6 +33,8 @@ class CameraState {
     this.bloom = 0.0,
     this.flashMode = FlashMode.off,
     this.zoom = 1.0,
+    this.beautyMode = 'none',
+    this.beautyIntensity = 0.0,
     this.errorMessage,
   });
 
@@ -71,6 +73,12 @@ class CameraState {
   /// 현재 줌 배율 (1.0 ~ 8.0)
   final double zoom;
 
+  /// 뷰티 모드 ('none'|'soft'|'glow'|'silky'|'faceBright'|'shadowLift'|'skinFocus'|'softDepth')
+  final String beautyMode;
+
+  /// 뷰티 강도 (0.0 ~ 1.0)
+  final double beautyIntensity;
+
   final String? errorMessage;
 
   bool get isReady => status == CameraStatus.ready;
@@ -92,6 +100,8 @@ class CameraState {
     double? bloom,
     FlashMode? flashMode,
     double? zoom,
+    String? beautyMode,
+    double? beautyIntensity,
     String? errorMessage,
   }) => CameraState(
     status: status ?? this.status,
@@ -108,6 +118,8 @@ class CameraState {
     bloom: bloom ?? this.bloom,
     flashMode: flashMode ?? this.flashMode,
     zoom: zoom ?? this.zoom,
+    beautyMode: beautyMode ?? this.beautyMode,
+    beautyIntensity: beautyIntensity ?? this.beautyIntensity,
     errorMessage: errorMessage ?? this.errorMessage,
   );
 }

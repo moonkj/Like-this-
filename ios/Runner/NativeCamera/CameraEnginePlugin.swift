@@ -81,6 +81,13 @@ final class LikeThisCamera: NSObject {
                 self.bwEngine.setCompareMode(enable)
                 result(nil)
 
+            // ── 뷰티 모드 ────────────────────────────────────────────────────
+            case "setBeauty":
+                let mode      = (call.arguments as? [String: Any])?["mode"]      as? String ?? "none"
+                let intensity = Float((call.arguments as? [String: Any])?["intensity"] as? Double ?? 0.0)
+                self.bwEngine.setBeauty(mode: mode, intensity: intensity)
+                result(nil)
+
             default:
                 result(FlutterMethodNotImplemented)
             }

@@ -622,16 +622,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                       key: const ValueKey('beauty'),
                       visible: true,
                       onChanged: (mode, intensity) {
-                        final n = ref.read(cameraProvider.notifier);
-                        switch (mode) {
-                          case BeautyMode.soft:
-                            n.setGrain(5.0 * (1 - intensity));
-                          case BeautyMode.glow:
-                            n.setLightLeak(intensity * 30);
-                          case BeautyMode.silky:
-                            n.setGrain(2.0);
-                            n.setVignette(intensity * 10);
-                        }
+                        ref.read(cameraProvider.notifier).setBeauty(mode.name, intensity);
                       },
                     )
                   : _showFilterBar

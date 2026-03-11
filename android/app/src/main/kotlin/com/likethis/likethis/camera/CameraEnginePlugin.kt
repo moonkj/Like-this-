@@ -100,6 +100,13 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 result.success(null)
             }
 
+            "setBeauty" -> {
+                val mode      = call.argument<String>("mode")      ?: "none"
+                val intensity = call.argument<Double>("intensity")?.toFloat() ?: 0f
+                session?.setBeauty(mode, intensity)
+                result.success(null)
+            }
+
             // ── 필터 채널 ─────────────────────────────────────────────────────────
             "loadLUT" -> {
                 val assetPath = call.argument<String>("assetPath") ?: ""
@@ -150,6 +157,7 @@ class MFCameraSession {
     fun startRecording() {}
     fun stopRecording(callback: (String?) -> Unit) { callback(null) }
     fun setCompareMode(enable: Boolean) {}
+    fun setBeauty(mode: String, intensity: Float) {}
     fun capturePhoto(callback: (String?) -> Unit) { callback(null) }
     fun updateRenderParams(params: BWRenderParams) {}
 }
