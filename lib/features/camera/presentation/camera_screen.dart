@@ -156,13 +156,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 children: [
                   _buildCameraPreview(camState),
 
-                  // 제스처
+                  // 제스처 (강도 바 위쪽 영역만)
                   if (camState.isReady)
-                    GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: _onTap,
-                      onVerticalDragUpdate: _onVerticalDrag,
-                      onHorizontalDragUpdate: _onHorizontalDrag,
+                    Positioned(
+                      top: 0, left: 0, right: 0,
+                      bottom: _showIntensityPanel ? 80 : 0,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: _onTap,
+                        onVerticalDragUpdate: _onVerticalDrag,
+                        onHorizontalDragUpdate: _onHorizontalDrag,
+                      ),
                     ),
 
                   // 상단 그라디언트 바 (카메라 기준 top=0)
@@ -307,16 +311,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _SideCircleButton(icon: Icons.flash_off, size: 20, onTap: () {}),
-          const Text(
-            'LIKE THIS',
-            style: TextStyle(
-              color: AppColors.silver,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 3.5,
-            ),
-          ),
-          const SizedBox(width: 44),
+          const Spacer(),
         ],
       ),
     );
@@ -353,22 +348,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   Widget _buildIntensityBar(CameraState camState) {
     return Container(
-      height: 44,
+      height: 56,
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(color: Colors.white24, width: 0.5),
       ),
       child: Row(
         children: [
-          const SizedBox(width: 14),
-          const Icon(Icons.tune, color: AppColors.textSecondary, size: 14),
+          const SizedBox(width: 16),
+          const Icon(Icons.tune, color: AppColors.textSecondary, size: 15),
           Expanded(
             child: SliderTheme(
               data: SliderThemeData(
-                trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
                 activeTrackColor: AppColors.silver,
                 inactiveTrackColor: Colors.white24,
                 thumbColor: AppColors.white,
