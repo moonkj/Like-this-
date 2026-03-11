@@ -47,14 +47,25 @@ final class MFBWEngine {
         }
     }
 
+    private var _dust: Float = 0.0
+    private var _bloom: Float = 0.0
+    private var _compareMode: Bool = false
+
     func updateParams(lutIntensity: Float, grain: Float, contrast: Float,
-                      exposure: Float, lightLeak: Float, vignette: Float) {
+                      exposure: Float, lightLeak: Float, vignette: Float,
+                      dust: Float = 0.0, bloom: Float = 0.0) {
         _lutIntensity = lutIntensity
         _grain = grain
         _contrast = contrast
         _exposure = exposure
         _lightLeak = lightLeak
         _vignette = vignette
+        _dust = dust
+        _bloom = bloom
+    }
+
+    func setCompareMode(_ enabled: Bool) {
+        _compareMode = enabled
     }
 
     /// CIImage 빌드 — 프리뷰용 (CVPixelBuffer)
@@ -64,6 +75,7 @@ final class MFBWEngine {
 
     /// CIImage 빌드 — 캡처용 (CIImage 직접)
     func buildImage(from input: CIImage) -> CIImage {
+        if _compareMode { return input }
         let bwBase = toBW(input)
         let toned  = applyTone(bwBase)
         // lutIntensity 블렌딩: 0.0 = 순수 B&W, 1.0 = 완전 필터 적용
@@ -182,12 +194,12 @@ final class MFBWEngine {
         var out = image
         if _vignette > 0.01 { out = applyVignette(out) }
         if _grain > 0.01    { out = applyGrain(out) }
-        switch activeFilterId {
-        case "bw_glow":  out = applyBloom(out)
-        case "bw_dust":  out = applyDust(out)
-        case "bw_paper": out = applyPaperTone(out)
-        default: break
-        }
+        // dust/bloom: 파라미터 강도 우선, 없으면 필터 기본 적용
+        let bloomIntensity = _bloom > 0.01 ? _bloom : (activeFilterId == "bw_glow" ? 0.3 : 0.0)
+        let dustIntensity  = _dust  > 0.01 ? _dust  : (activeFilterId == "bw_dust" ? 0.4 : 0.0)
+        if bloomIntensity > 0.01 { out = applyBloom(out, intensity: bloomIntensity) }
+        if dustIntensity  > 0.01 { out = applyDust(out, intensity: dustIntensity) }
+        if activeFilterId == "bw_paper" { out = applyPaperTone(out) }
         return out
     }
 
@@ -218,19 +230,20 @@ final class MFBWEngine {
         return blend.outputImage ?? image
     }
 
-    private func applyBloom(_ image: CIImage) -> CIImage {
+    private func applyBloom(_ image: CIImage, intensity: Float = 0.65) -> CIImage {
         guard let f = CIFilter(name: "CIBloom") else { return image }
         f.setValue(image, forKey: kCIInputImageKey)
         f.setValue(22.0,  forKey: kCIInputRadiusKey)
-        f.setValue(0.65,  forKey: kCIInputIntensityKey)
+        f.setValue(Double(intensity) * 2.0, forKey: kCIInputIntensityKey)
         return f.outputImage ?? image
     }
 
-    private func applyDust(_ image: CIImage) -> CIImage {
+    private func applyDust(_ image: CIImage, intensity: Float = 0.4) -> CIImage {
         guard let noise = CIFilter(name: "CIRandomGenerator")?.outputImage else { return image }
         guard let thresh = CIFilter(name: "CIColorThreshold") else { return image }
         thresh.setValue(noise.cropped(to: image.extent), forKey: kCIInputImageKey)
-        thresh.setValue(0.97, forKey: "inputThreshold")
+        // intensity가 높을수록 더 많은 먼지 (threshold 낮춤)
+        thresh.setValue(1.0 - Double(intensity) * 0.08, forKey: "inputThreshold")
         guard let dots = thresh.outputImage else { return image }
 
         guard let alpha = CIFilter(name: "CIColorMatrix") else { return image }
@@ -238,7 +251,7 @@ final class MFBWEngine {
         alpha.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
         alpha.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
         alpha.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
-        alpha.setValue(CIVector(x: 0, y: 0, z: 0, w: 0.25), forKey: "inputAVector")
+        alpha.setValue(CIVector(x: 0, y: 0, z: 0, w: Double(intensity) * 0.6), forKey: "inputAVector")
         guard let fadedDots = alpha.outputImage else { return image }
 
         guard let comp = CIFilter(name: "CISourceOverCompositing") else { return image }

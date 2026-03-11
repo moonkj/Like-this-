@@ -103,6 +103,25 @@ final class MFCameraSession: NSObject {
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 
+    func setFlash(mode: String) {
+        guard let dev = currentDevice, dev.hasTorch else { return }
+        try? dev.lockForConfiguration()
+        switch mode {
+        case "on":   dev.torchMode = .on
+        case "auto": dev.torchMode = .auto
+        default:     dev.torchMode = .off
+        }
+        dev.unlockForConfiguration()
+    }
+
+    func startRecording() {
+        // MFVideoRecorder 연동은 별도 구현 — 현재 stub
+    }
+
+    func stopRecording(completion: @escaping (String?) -> Void) {
+        completion(nil)
+    }
+
     // MARK: - Private Setup
 
     private func setupSession() {
