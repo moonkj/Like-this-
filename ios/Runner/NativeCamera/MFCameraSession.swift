@@ -85,8 +85,14 @@ final class MFCameraSession: NSObject {
                self.captureSession.canAddInput(audioInp) {
                 self.captureSession.addInput(audioInp)
             }
-            self.fixVideoOrientation()
             self.captureSession.commitConfiguration()
+            // commitConfiguration 이후에 connection이 확립됨 → rotation 적용
+            self.fixVideoOrientation()
+            // 기존 버퍼 풀 & 이전 프레임 리셋 (카메라 치수 변경에 대응)
+            self.outputBufferPool = nil
+            self.imageLock.lock()
+            self.latestProcessedImage = nil
+            self.imageLock.unlock()
         }
     }
 
