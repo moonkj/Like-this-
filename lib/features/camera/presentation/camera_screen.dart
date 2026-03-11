@@ -419,23 +419,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       );
     }
 
+    // hd1920x1080 프리셋 → 세로 회전 후 1080×1920 (9:16)
+    // FittedBox.cover 가 9:16 → 3:4 중앙 크롭 처리
     Widget preview = ClipRect(
       child: FittedBox(
         fit: BoxFit.cover,
         child: SizedBox(
-          width: 3, height: 4,
+          width: 9, height: 16,
           child: Texture(textureId: camState.textureId!),
         ),
       ),
     );
 
-    if (camState.isFront) {
-      preview = Transform(
-        alignment: Alignment.center,
-        transform: Matrix4.diagonal3Values(-1.0, 1.0, 1.0),
-        child: preview,
-      );
-    }
+    // 전면 카메라 미러: 네이티브(Swift isVideoMirrored)에서만 처리
     return preview;
   }
 

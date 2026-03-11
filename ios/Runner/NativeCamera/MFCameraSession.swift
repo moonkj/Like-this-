@@ -71,12 +71,19 @@ final class MFCameraSession: NSObject {
             guard let self = self else { return }
             self.captureSession.beginConfiguration()
             self.captureSession.inputs.forEach { self.captureSession.removeInput($0) }
+            // 비디오 입력 재추가
             let pos: AVCaptureDevice.Position = self.isFront ? .front : .back
             if let dev = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: pos),
                let inp = try? AVCaptureDeviceInput(device: dev),
                self.captureSession.canAddInput(inp) {
                 self.captureSession.addInput(inp)
                 self.currentDevice = dev
+            }
+            // 오디오 입력 재추가 (removeInput으로 제거됐으므로)
+            if let audioDev = AVCaptureDevice.default(for: .audio),
+               let audioInp = try? AVCaptureDeviceInput(device: audioDev),
+               self.captureSession.canAddInput(audioInp) {
+                self.captureSession.addInput(audioInp)
             }
             self.fixVideoOrientation()
             self.captureSession.commitConfiguration()
@@ -129,7 +136,9 @@ final class MFCameraSession: NSObject {
 
     private func setupSession() {
         captureSession.beginConfiguration()
-        captureSession.sessionPreset = .photo
+        // .photo = 고해상도 정방형 센서 전체 (FOV 넓음, 처리 부하 큼)
+        // .hd1920x1080 = 16:9 표준 화각 (iOS 카메라앱 기본값과 유사)
+        captureSession.sessionPreset = .hd1920x1080
 
         let pos: AVCaptureDevice.Position = isFront ? .front : .back
         guard let dev = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: pos),
@@ -160,8 +169,16 @@ final class MFCameraSession: NSObject {
 
     private func fixVideoOrientation() {
         guard let conn = videoOutput.connection(with: .video) else { return }
-        if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
-        if conn.isVideoMirroringSupported   { conn.isVideoMirrored = isFront }
+        // iOS 17+ 에서 videoOrientation deprecated → videoRotationAngle 사용
+        if #available(iOS 17.0, *) {
+            if conn.isVideoRotationAngleSupported(90) {
+                conn.videoRotationAngle = 90   // portrait = 90°
+            }
+        } else {
+            if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
+        }
+        // 전면 카메라 미러는 네이티브에서만 처리 (Flutter Transform 없음)
+        if conn.isVideoMirroringSupported { conn.isVideoMirrored = isFront }
     }
 
     /// 첫 프레임 도착 시 출력 버퍼 풀 생성
