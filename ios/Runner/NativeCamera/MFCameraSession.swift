@@ -187,15 +187,13 @@ final class MFCameraSession: NSObject {
         if conn.isVideoMirroringSupported { conn.isVideoMirrored = isFront }
     }
 
-    /// 첫 프레임 도착 시 출력 버퍼 풀 생성
-    private func makeOutputPool(matching pixelBuffer: CVPixelBuffer) {
+    /// 첫 프레임 도착 시 출력 버퍼 풀 생성 (처리된 이미지 기준 크기)
+    private func makeOutputPool(width: Int, height: Int) {
         guard outputBufferPool == nil else { return }
-        let w = CVPixelBufferGetWidth(pixelBuffer)
-        let h = CVPixelBufferGetHeight(pixelBuffer)
         let attrs: NSDictionary = [
             kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
-            kCVPixelBufferWidthKey:  w,
-            kCVPixelBufferHeightKey: h,
+            kCVPixelBufferWidthKey:  width,
+            kCVPixelBufferHeightKey: height,
             kCVPixelBufferIOSurfacePropertiesKey: [:],
         ]
         CVPixelBufferPoolCreate(nil, nil, attrs, &outputBufferPool)
@@ -233,8 +231,14 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptu
 
         guard let rawBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         bwEngine.detectFaces(in: rawBuffer)
-        makeOutputPool(matching: rawBuffer)
-        let processed = bwEngine.buildImage(from: rawBuffer)
+
+        // connection 레벨 회전이 적용 안됐을 때(landscape 버퍼)를 CIImage 레벨에서 보정
+        var inputImage = CIImage(cvPixelBuffer: rawBuffer)
+        if inputImage.extent.width > inputImage.extent.height {
+            inputImage = inputImage.oriented(.right)
+        }
+        makeOutputPool(width: Int(inputImage.extent.width), height: Int(inputImage.extent.height))
+        let processed = bwEngine.buildImage(from: inputImage)
         imageLock.lock()
         latestProcessedImage = processed
         imageLock.unlock()
