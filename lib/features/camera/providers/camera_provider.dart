@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../../../core/models/camera_state.dart';
@@ -172,8 +173,8 @@ class CameraNotifier extends StateNotifier<CameraState> {
         final path = await CameraEngine.stopRecording();
         state = state.copyWith(status: CameraStatus.ready);
         if (path != null) {
-          await PhotoManager.editor.saveImageWithPath(
-            path,
+          await PhotoManager.editor.saveVideo(
+            File(path),
             title: 'LikeThis_video_${DateTime.now().millisecondsSinceEpoch}',
           );
         }

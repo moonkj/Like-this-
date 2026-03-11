@@ -336,6 +336,62 @@
 - [x] `CameraEnginePlugin.kt` — setFlash / startRecording / stopRecording / setCompareMode 케이스 추가
 - [x] `MFCameraSession` stub에 동일 4개 메서드 추가
 
+## Sprint 11 — 뷰티 기능 전면 구현 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 11-1: 뷰티 엔진 확장 (MFBeautyEngine.swift)
+- [x] `BeautyMode` enum 7종: `soft`, `glow`, `silky`, `faceBright`, `shadowLift`, `skinFocus`, `softDepth`
+- [x] VisionKit `VNDetectFaceRectanglesRequest` 얼굴 감지 (매 프레임)
+- [x] `faceMask(for:softEdge:)` — `CIRadialGradient` 다중 얼굴 마스크 생성
+- [x] `applySoftSkin` — `CIGaussianBlur` + `CIBlendWithMask` 얼굴 영역만 부드럽게
+- [x] `applyGlowMono` — `CIBloom` radius 8.0 전체 글로우
+- [x] `applySilky` — `CIToneCurve` 쉐도우 리프트
+- [x] `applyFaceBrightness` — 얼굴 영역 밝기 +0.2 boost
+- [x] `applyShadowLift` — 다크서클 쉐도우 리프트 (눈 아래 밝게)
+- [x] `applySkinFocus` — 배경 어둡게 + 얼굴 마스크 블렌드
+- [x] `applySoftDepth` — 배경 가우시안 블러 (역 얼굴 마스크 사용)
+
+#### Sprint 11-2: 카메라 파이프라인 연결
+- [x] `MFBWEngine.applyBeauty(_:)` — `buildProcessed` 에 뷰티 패스 추가
+- [x] `MFCameraSession.captureOutput` — `bwEngine.detectFaces(in: rawBuffer)` 호출
+- [x] `CameraEnginePlugin.swift` `setBeauty` 케이스 추가
+- [x] `CameraEngine.dart` `setBeauty(mode, intensity)` 브릿지 추가
+- [x] `CameraNotifier.setBeauty()` 상태 업데이트 + 네이티브 동기화
+
+#### Sprint 11-3: 뷰티 패널 UI 개선
+- [x] `BeautyMode` enum 7종으로 확장 (soft/glow/silky/faceBright/shadowLift/skinFocus/softDepth)
+- [x] 수평 스크롤 `ListView` 탭 (고정 Row → 스크롤 가능)
+- [x] 슬라이더 레이아웃 간소화
+
+#### Sprint 11-4: 버그 수정
+- [x] MFBeautyEngine.swift Xcode project.pbxproj PBXFileReference 누락 수정
+- [x] editor_screen.dart `import flutter/rendering.dart` 추가 (RenderRepaintBoundary 오류)
+- [x] 필터 강도 슬라이더 터치 안되는 문제 — GestureDetector bottom 80→100으로 수정
+- [x] 타이머 버튼 텍스트 투명 문제 — Colors.white 텍스트 + 검정 배경으로 수정
+- [x] 비교 모드 좌우 구분선 안보이는 문제 — `MFBWEngine.makeSplitImage()` 50:50 분할 + Flutter `_CompareSplitOverlay` 위젯 구현
+
+---
+
+## Sprint 12 — 동영상 녹화 저장 구현 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 12-1: MFVideoRecorder.swift 완전 구현
+- [x] `AVAssetWriter` + `AVAssetWriterInput` + `AVAssetWriterInputPixelBufferAdaptor` 기반
+- [x] `startRecording()` — 지연 초기화 (첫 프레임 크기 기반 writer 생성)
+- [x] `append(ciImage:context:at:)` — 처리된 B&W CIImage를 픽셀 버퍼로 변환 후 기록
+- [x] `stopRecording(completion:)` — `markAsFinished()` + `finishWriting` 비동기 완료
+
+#### Sprint 12-2: MFCameraSession 연결
+- [x] `videoRecorder: MFVideoRecorder` 프로퍼티 추가
+- [x] `startRecording()` stub → `videoRecorder.startRecording()` 연결
+- [x] `stopRecording(completion:)` stub → `videoRecorder.stopRecording(completion:)` 연결
+- [x] `captureOutput` 델리게이트에 B&W 처리된 프레임 → `videoRecorder.append()` 파이프
+
+#### Sprint 12-3: Flutter 저장 방식 수정
+- [x] `camera_provider.dart` `toggleRecording()` — `saveImageWithPath` → `PhotoManager.editor.saveVideo(File(path))` 변경
+
 ---
 
 ## 기술 결정 로그 (ADR)

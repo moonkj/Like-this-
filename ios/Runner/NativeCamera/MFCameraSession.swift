@@ -25,6 +25,7 @@ final class MFCameraSession: NSObject {
     private var outputBufferPool: CVPixelBufferPool?
 
     private var photoCaptureCompletion: ((String?) -> Void)?
+    private let videoRecorder = MFVideoRecorder()
 
     init(bwEngine: MFBWEngine, registry: Any, frontCamera: Bool) {
         self.bwEngine       = bwEngine
@@ -115,11 +116,11 @@ final class MFCameraSession: NSObject {
     }
 
     func startRecording() {
-        // MFVideoRecorder 연동은 별도 구현 — 현재 stub
+        videoRecorder.startRecording()
     }
 
     func stopRecording(completion: @escaping (String?) -> Void) {
-        completion(nil)
+        videoRecorder.stopRecording(completion: completion)
     }
 
     // MARK: - Private Setup
@@ -199,6 +200,10 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         imageLock.unlock()
         if registeredTextureId >= 0 {
             textureRegistry.textureFrameAvailable(registeredTextureId)
+        }
+        if videoRecorder.isRecording {
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            videoRecorder.append(ciImage: processed, context: bwEngine.context, at: pts)
         }
     }
 }
