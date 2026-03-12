@@ -87,10 +87,19 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/editor',
       pageBuilder: (context, state) {
-        final imagePath = state.extra as String? ?? '';
+        final extra = state.extra;
+        final String imagePath;
+        final String? assetId;
+        if (extra is Map<String, dynamic>) {
+          imagePath = extra['path'] as String? ?? '';
+          assetId   = extra['assetId'] as String?;
+        } else {
+          imagePath = extra as String? ?? '';
+          assetId   = null;
+        }
         return CustomTransitionPage(
           key: state.pageKey,
-          child: EditorScreen(imagePath: imagePath),
+          child: EditorScreen(imagePath: imagePath, assetId: assetId),
           transitionsBuilder: (context, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
           transitionDuration: const Duration(milliseconds: 300),

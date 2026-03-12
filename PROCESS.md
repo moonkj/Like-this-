@@ -16,6 +16,8 @@
 | Sprint 2 | 렌더링 엔진 & 카메라 UI | ✅ 완료 |
 | Sprint 3 | UI/UX 컴포넌트 | ✅ 완료 |
 | Sprint 4 | Polish & QA | 🔄 진행 중 |
+| Sprint 13 | 카메라 UI/UX 개선 (오디오/비교/제스처) | ✅ 완료 |
+| Sprint 14 | 에디터 크롭 & 카메라 센서 버그 수정 | ✅ 완료 |
 
 ---
 
@@ -442,6 +444,36 @@
 
 ---
 
+## Sprint 14 — 에디터 크롭 & 카메라 센서 버그 수정 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 14-1: 에디터 9:16 크롭 비율 추가
+- [x] `editor_screen.dart` `_buildCropContent` — `'9:16': 9/16` 비율 추가
+- [x] 기존 `'자유' / '1:1' / '3:4' / '4:3' / '16:9'` 에 이어 세로 숏폼 비율 완성
+
+#### Sprint 14-2: 카메라 센서 상시 활성 버그 수정 (핵심)
+- **증상**: 갤러리/에디터 화면 진입 후에도 녹색 LED(카메라 센서) 켜짐
+- **원인 분석**:
+  - `RouteObserver` / `RouteAware` mixin — go_router 14 Pages API에서 `didPushNext`/`didPopNext` 보장 안 됨
+  - `WidgetsBindingObserver.didChangeAppLifecycleState` — 네비게이터 스택에 가려진 화면에도 전달됨
+  - 앱 백그라운드 → 포그라운드 복귀 시 갤러리가 위에 있어도 CameraScreen의 `resumed` 이벤트 → `resumeSession()` 호출 → LED ON
+- **해결**:
+  - `RouteAware` 완전 제거
+  - `bool _isCurrentRoute = true` 플래그 도입
+  - `didChangeDependencies`에서 `ModalRoute.of(context)?.isCurrent` 체크
+    - `_ModalScopeStatus` InheritedWidget 의존 → push/pop 시 100% 신뢰 호출
+    - `addPostFrameCallback`으로 부작용 지연 (빌드 중 채널 호출 방지)
+  - `didChangeAppLifecycleState`에 `if (!_isCurrentRoute) return` 가드 추가
+- [x] `camera_screen.dart` — `RouteAware` 제거, `_isCurrentRoute` 플래그 + `didChangeDependencies` 재작성
+- [x] `core/services/router.dart` — `appRouteObserver` 제거 (클린업)
+
+#### Sprint 14-3: Timer dispose 누락 수정
+- **증상**: 화면 전환 후 "setState called after dispose" 경고 가능성
+- [x] `camera_screen.dart` `dispose()` — `_sideButtonTimer`, `_intensityPanelTimer` 취소 추가 (Reviewer 단계에서 발견)
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용
@@ -469,6 +501,8 @@
 | 날짜 | 이슈 | 해결 |
 |------|------|------|
 | 2026-03-11 | GitHub clone 네트워크 오류 (curl 56) | flutter create로 신규 생성으로 전환 |
+| 2026-03-12 | 갤러리/에디터 진입 후 카메라 LED 상시 ON | ModalRoute.isCurrent + _isCurrentRoute 가드로 해결 |
+| 2026-03-12 | RouteObserver go_router 14 Pages API 비호환 | didChangeDependencies + InheritedWidget 방식으로 교체 |
 
 ---
 

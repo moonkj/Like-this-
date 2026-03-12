@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,7 +61,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Timer? _sideButtonTimer;
   bool _showSideButtons = true;
   Timer? _intensityPanelTimer;
-  VoidCallback? _routeListener;
+
+  // 카메라 화면이 현재 최상단 route인지 추적
+  // (false 이면 갤러리/에디터 등 위에 화면이 있음)
+  bool _isCurrentRoute = true;
 
   @override
   void initState() {
@@ -90,43 +94,39 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_routeListener == null) {
-      _routeListener = _onRouteChanged;
-      GoRouter.of(context).routerDelegate.addListener(_routeListener!);
-    }
+    // ModalRoute.isCurrent 는 _ModalScopeStatus InheritedWidget 에 의존하므로
+    // 다른 화면이 push/pop 될 때마다 이 메서드가 반드시 호출됨 → 100% 신뢰
+    final isCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+    if (isCurrent == _isCurrentRoute) return;
+    _isCurrentRoute = isCurrent;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_isCurrentRoute) {
+        ref.read(cameraProvider.notifier).resumeSession();
+      } else {
+        ref.read(cameraProvider.notifier).pauseSession();
+      }
+    });
   }
 
   @override
   void dispose() {
-    if (_routeListener != null) {
-      GoRouter.of(context).routerDelegate.removeListener(_routeListener!);
-    }
     WidgetsBinding.instance.removeObserver(this);
     _tapTimer?.cancel();
     _indicatorTimer?.cancel();
     _filterNameTimer?.cancel();
     _zoomTimer?.cancel();
+    _sideButtonTimer?.cancel();
+    _intensityPanelTimer?.cancel();
     ref.read(cameraProvider.notifier).dispose();
     super.dispose();
   }
 
-  void _onRouteChanged() {
-    if (!mounted) return;
-    final path = GoRouter.of(context)
-        .routerDelegate
-        .currentConfiguration
-        .uri
-        .path;
-    final notifier = ref.read(cameraProvider.notifier);
-    if (path == '/') {
-      notifier.resumeSession();
-    } else {
-      notifier.pauseSession();
-    }
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 카메라 화면이 현재 최상단일 때만 lifecycle 이벤트 처리
+    // (_isCurrentRoute = false 이면 갤러리/에디터가 위에 있는 상태)
+    if (!_isCurrentRoute) return;
     final notifier = ref.read(cameraProvider.notifier);
     if (state == AppLifecycleState.paused) notifier.pauseSession();
     if (state == AppLifecycleState.resumed) notifier.resumeSession();
@@ -718,9 +718,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      _BottomIconButton(
-                        icon: Icons.photo_library_outlined,
+                      GestureDetector(
                         onTap: () => context.push('/gallery'),
+                        child: _GalleryThumb(path: camState.lastCapturedPath),
                       ),
                       const SizedBox(width: 12),
                       _BottomIconButton(
@@ -967,6 +967,37 @@ class _BottomIconButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+// ── 갤러리 썸네일 버튼 ────────────────────────────────────────────────────────
+
+class _GalleryThumb extends StatelessWidget {
+  const _GalleryThumb({this.path});
+  final String? path;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 52, height: 52,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: path != null
+            ? Image.file(
+                File(path!),
+                width: 52, height: 52,
+                fit: BoxFit.cover,
+              )
+            : Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border, width: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.photo_library_outlined,
+                    color: AppColors.textPrimary, size: 26),
+              ),
+      ),
+    );
+  }
 }
 
 // ── 비교 모드 분할 오버레이 ───────────────────────────────────────────────────
