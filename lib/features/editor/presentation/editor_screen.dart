@@ -153,18 +153,19 @@ class _EditorScreenState extends State<EditorScreen> {
 
   // ── ColorFilter ───────────────────────────────────────────────────────────
 
-  ColorFilter _buildFilter() {
+  /// 4×5 행렬 값 (20개) — 화면 표시와 네이티브 저장 모두 사용
+  List<double> _buildFilterMatrix() {
     final ev   = _exposure / 100.0 * 0.8;
     final c    = 1.0 + _contrast / 100.0 * 1.0;
     final bias = ev * 255 + (1.0 - c) * 127.5;
 
     if (_selectedFilterId == null) {
-      return ColorFilter.matrix([
+      return [
         c, 0, 0, 0, bias,
         0, c, 0, 0, bias,
         0, 0, c, 0, bias,
         0, 0, 0, 1, 0,
-      ]);
+      ];
     }
 
     final tone = _filterTone(_selectedFilterId);
@@ -174,13 +175,15 @@ class _EditorScreenState extends State<EditorScreen> {
     final bwG  = 0.587 * _filterIntensity;
     final bwB  = 0.114 * _filterIntensity;
     final keep = 1.0 - _filterIntensity;
-    return ColorFilter.matrix([
+    return [
       (bwR + keep) * c * fc, bwG * c * fc,          bwB * c * fc,          0, bias + fb,
       bwR * c * fc,          (bwG + keep) * c * fc, bwB * c * fc,          0, bias + fb,
       bwR * c * fc,          bwG * c * fc,          (bwB + keep) * c * fc, 0, bias + fb,
       0, 0, 0, 1, 0,
-    ]);
+    ];
   }
+
+  ColorFilter _buildFilter() => ColorFilter.matrix(_buildFilterMatrix());
 
   List<double> _filterTone(String? id) {
     switch (id) {
@@ -230,7 +233,16 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_isSaving) return;
     setState(() => _isSaving = true);
     try {
-      // ── 동영상 크롭 저장 ────────────────────────────────────────────────
+      // ── 동영상 저장 ─────────────────────────────────────────────────────
+      if (_isVideo && !_cropChanged) {
+        // 크롭 없이 효과만 적용: 원본 영상 저장 (영상 프레임 필터 적용은 미지원)
+        final file = File(_currentPath);
+        final name = 'likethis_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        await PhotoManager.editor.saveVideo(file, title: name);
+        HapticFeedback.lightImpact();
+        if (mounted) context.pop();
+        return;
+      }
       if (_isVideo && _cropChanged) {
         final dir  = await getTemporaryDirectory();
         final name = 'likethis_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
@@ -251,51 +263,32 @@ class _EditorScreenState extends State<EditorScreen> {
       }
 
       final dir  = await getTemporaryDirectory();
-      final name = 'likethis_edit_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File('${dir.path}/$name');
+      final name = 'likethis_edit_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final outputPath = '${dir.path}/$name';
 
-      if (_cropChanged && _decodedImage != null) {
-        // 크롭 적용: dart:ui Canvas로 직접 렌더링
-        final img = _decodedImage!;
-        final srcRect = Rect.fromLTRB(
-          _cropRect.left  * img.width,  _cropRect.top    * img.height,
-          _cropRect.right * img.width,  _cropRect.bottom * img.height,
-        );
-        final dstW = srcRect.width.round();
-        final dstH = srcRect.height.round();
-        final recorder = ui.PictureRecorder();
-        final canvas = Canvas(recorder,
-            Rect.fromLTWH(0, 0, dstW.toDouble(), dstH.toDouble()));
-        // ColorFilter 적용
-        canvas.drawImageRect(img, srcRect,
-            Rect.fromLTWH(0, 0, dstW.toDouble(), dstH.toDouble()),
-            Paint()..colorFilter = _buildFilter());
-        // 비네팅
-        if (_vignette > 0) {
-          final vp = Paint()
-            ..shader = RadialGradient(
-              center: Alignment.center, radius: 1.0,
-              colors: [Colors.transparent,
-                  Colors.black.withValues(alpha: _vignette / 100 * 0.85)],
-              stops: const [0.35, 1.0],
-            ).createShader(Rect.fromLTWH(0, 0, dstW.toDouble(), dstH.toDouble()));
-          canvas.drawRect(Rect.fromLTWH(0, 0, dstW.toDouble(), dstH.toDouble()), vp);
-        }
-        final picture = recorder.endRecording();
-        final rendered = await picture.toImage(dstW, dstH);
-        final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
-        await file.writeAsBytes(byteData!.buffer.asUint8List());
-      } else {
-        // 일반 RepaintBoundary 캡처
-        final pixelRatio = MediaQuery.of(context).devicePixelRatio;
-        final boundary = _previewKey.currentContext!
-            .findRenderObject()! as RenderRepaintBoundary;
-        final image = await boundary.toImage(pixelRatio: pixelRatio);
-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        await file.writeAsBytes(byteData!.buffer.asUint8List());
+      // 소스 파일: originFile(원본 해상도) 우선, 없으면 현재 경로
+      String sourcePath = _currentPath;
+      final list = widget.assetList;
+      if (list != null && _currentIndex < list.length) {
+        final originFile = await list[_currentIndex].originFile;
+        if (originFile != null) sourcePath = originFile.path;
       }
 
-      await PhotoManager.editor.saveImageWithPath(file.path, title: name);
+      // 네이티브 CIImage 파이프라인으로 처리 (HEIC/JPEG/PNG 전체 해상도 보장)
+      final resultPath = await CameraEngine.processAndSaveImage(
+        sourcePath:  sourcePath,
+        colorMatrix: _buildFilterMatrix(),
+        vignette:    _vignette / 100.0,
+        grain:       _grain    / 100.0,
+        outputPath:  outputPath,
+        cropX: _cropChanged ? _cropRect.left   : 0.0,
+        cropY: _cropChanged ? _cropRect.top    : 0.0,
+        cropW: _cropChanged ? _cropRect.width  : 1.0,
+        cropH: _cropChanged ? _cropRect.height : 1.0,
+      );
+      if (resultPath == null) throw Exception('네이티브 처리 실패');
+
+      await PhotoManager.editor.saveImageWithPath(resultPath, title: name);
       HapticFeedback.lightImpact();
       if (mounted) context.pop();
     } catch (_) {
@@ -465,10 +458,10 @@ class _EditorScreenState extends State<EditorScreen> {
           // 공유
           _CircleBtn(key: _shareKey, icon: Icons.ios_share_rounded, onTap: _share),
           const SizedBox(width: 8),
-          // 저장 (비디오는 크롭 적용 시만 활성)
+          // 저장 (변경 사항 없을 때만 비활성)
           _CircleBtn(
             icon: Icons.download_rounded,
-            onTap: (_isVideo && !_cropChanged) ? null : (_isSaving ? null : _save),
+            onTap: (_isVideo && !_hasChanges) ? null : (_isSaving ? null : _save),
             loading: _isSaving,
           ),
         ],
@@ -699,12 +692,23 @@ class _EditorScreenState extends State<EditorScreen> {
               fit: BoxFit.contain, width: double.infinity, height: double.infinity,
               gaplessPlayback: true),
         ),
-        if (_vignette > 0)
-          Positioned.fill(child: IgnorePointer(
-              child: _VignetteOverlay(intensity: _vignette / 100))),
-        if (_grain > 0)
-          Positioned.fill(child: IgnorePointer(
-              child: CustomPaint(painter: _GrainPainter(intensity: _grain / 100)))),
+        // 효과 오버레이는 실제 이미지 영역에만 (letterbox 제외)
+        if ((_vignette > 0 || _grain > 0) && _imageSize != null)
+          Center(
+            child: AspectRatio(
+              aspectRatio: _imageSize!.width / _imageSize!.height,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (_vignette > 0)
+                    IgnorePointer(child: _VignetteOverlay(intensity: _vignette / 100)),
+                  if (_grain > 0)
+                    IgnorePointer(child: CustomPaint(
+                        painter: _GrainPainter(intensity: _grain / 100))),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -803,6 +807,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     : (val > 0 ? '+$val' : '$val');
 
                 return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () { HapticFeedback.selectionClick(); setState(() => _selectedEffect = i); },
                   child: SizedBox(
                     width: 52,
@@ -981,7 +986,7 @@ class _CompareOverlayState extends State<_CompareOverlay> {
         onHorizontalDragUpdate: (d) {
           setState(() => _splitX = (_splitX + d.delta.dx / w).clamp(0.05, 0.95));
         },
-        child: Stack(children: [
+        child: Stack(clipBehavior: Clip.none, children: [
           // Before: 원본 (전체, 동일 크기/정렬)
           Positioned.fill(
             child: widget.videoController != null
@@ -1032,12 +1037,12 @@ class _CompareOverlayState extends State<_CompareOverlay> {
           ),
           // Before 레이블 (핸들 왼쪽)
           Positioned(
-            left: max(8, splitPx - 14 - 8 - 56).toDouble(),
+            left: splitPx - 14 - 8 - 56,
             top: h / 2 - 13,
             child: _SplitLabel(text: '원본')),
           // After 레이블 (핸들 오른쪽)
           Positioned(
-            left: min(w - 64, splitPx + 14 + 8).toDouble(),
+            left: splitPx + 14 + 8,
             top: h / 2 - 13,
             child: _SplitLabel(text: widget.afterLabel)),
         ]),
@@ -1172,9 +1177,10 @@ class _FilterItem extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: SizedBox(
-      width: selected ? 58 : 52,
+      width: 64,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 150),

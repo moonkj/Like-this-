@@ -54,6 +54,7 @@ final class MFBWEngine {
     private var _beautyMode: String = "none"
     private var _beautyIntensity: Float = 0.0
     let beautyEngine = MFBeautyEngine()
+    private var _faceDetectFrameCount: Int = 0
 
     func updateParams(lutIntensity: Float, grain: Float, contrast: Float,
                       exposure: Float, lightLeak: Float, vignette: Float,
@@ -66,6 +67,12 @@ final class MFBWEngine {
         _vignette = vignette
         _dust = dust
         _bloom = bloom
+    }
+
+    private var _isNoneMode: Bool = false
+
+    func setNoneMode(_ enabled: Bool) {
+        _isNoneMode = enabled
     }
 
     func setCompareMode(_ enabled: Bool) {
@@ -83,6 +90,10 @@ final class MFBWEngine {
     }
 
     func detectFaces(in pixelBuffer: CVPixelBuffer) {
+        // 뷰티 비활성 시 추론 스킵, 활성 시 3프레임 중 1회만 실행 (30fps → 10fps)
+        guard _beautyIntensity > 0.01 else { return }
+        _faceDetectFrameCount += 1
+        guard _faceDetectFrameCount % 3 == 0 else { return }
         beautyEngine.detectFaces(in: pixelBuffer)
     }
 
@@ -93,6 +104,10 @@ final class MFBWEngine {
 
     /// CIImage 빌드 — 캡처용 (CIImage 직접)
     func buildImage(from input: CIImage) -> CIImage {
+        // 없음 모드: 원본 컬러 그대로 (비교 모드도 무의미하므로 스킵)
+        guard !_isNoneMode else {
+            return input.cropped(to: input.extent)
+        }
         let processed = buildProcessed(from: input)
         if _compareMode {
             return makeSplitImage(original: input, processed: processed)
@@ -102,16 +117,25 @@ final class MFBWEngine {
 
     /// 캡처 전용 — 비교 모드 무관하게 필터만 적용 (분할선 없음)
     func buildImageForCapture(from input: CIImage) -> CIImage {
+        guard !_isNoneMode else {
+            return input.cropped(to: input.extent)
+        }
         return buildProcessed(from: input)
     }
 
     private func buildProcessed(from input: CIImage) -> CIImage {
         let bwBase = toBW(input)
         let toned  = applyTone(bwBase)
-        let blended = blend(from: bwBase, to: toned, amount: CGFloat(_lutIntensity))
+        // Phase 1: 0~50% → 컬러에서 순수 B&W로 탈색
+        let bwAmount   = CGFloat(min(_lutIntensity * 2.0, 1.0))
+        let desaturated = blend(from: input, to: bwBase, amount: bwAmount)
+        // Phase 2: 0~100% → 순수 B&W에서 톤 적용 B&W로 (intensity 전 구간 선형)
+        let blended = blend(from: desaturated, to: toned, amount: CGFloat(_lutIntensity))
         var image = applyExposureContrast(blended)
-        image = applyEffects(image)
-        image = applyBeauty(image)
+        if _lutIntensity > 0.01 {
+            image = applyEffects(image, scale: _lutIntensity)
+            image = applyBeauty(image)
+        }
         return image.cropped(to: input.extent)
     }
 
@@ -236,40 +260,34 @@ final class MFBWEngine {
         f.setValue(Double(_exposure) * 0.5, forKey: kCIInputBrightnessKey)
         // _contrast: -1.0 ~ +1.0 → scale 0.5 ~ 1.5
         f.setValue(1.0 + Double(_contrast) * 0.5, forKey: kCIInputContrastKey)
-        f.setValue(0.0, forKey: kCIInputSaturationKey)
         return f.outputImage ?? image
     }
 
     // MARK: - 효과
 
-    private func applyEffects(_ image: CIImage) -> CIImage {
+    private func applyEffects(_ image: CIImage, scale: Float = 1.0) -> CIImage {
         var out = image
-        if _vignette > 0.01 { out = applyVignette(out) }
-        if _grain > 0.01    { out = applyGrain(out) }
-        // dust/bloom: 파라미터 강도 우선, 없으면 필터 기본 적용
-        let bloomIntensity = _bloom > 0.01 ? _bloom : (activeFilterId == "bw_glow" ? 0.3 : 0.0)
-        let dustIntensity  = _dust  > 0.01 ? _dust  : (activeFilterId == "bw_dust" ? 0.4 : 0.0)
-        if bloomIntensity > 0.01 { out = applyBloom(out, intensity: bloomIntensity) }
-        if dustIntensity  > 0.01 { out = applyDust(out, intensity: dustIntensity) }
+        if _vignette * scale > 0.01 { out = applyVignette(out, intensity: _vignette * scale) }
+        if _grain * scale > 0.01    { out = applyGrain(out, intensity: _grain * scale) }
+        if _bloom * scale > 0.01    { out = applyBloom(out, intensity: _bloom * scale) }
+        if _dust  * scale > 0.01    { out = applyDust(out, intensity: _dust * scale) }
         if activeFilterId == "bw_paper" { out = applyPaperTone(out) }
         return out
     }
 
-    private func applyVignette(_ image: CIImage) -> CIImage {
+    private func applyVignette(_ image: CIImage, intensity: Float) -> CIImage {
         guard let f = CIFilter(name: "CIVignette") else { return image }
         f.setValue(image, forKey: kCIInputImageKey)
-        // _vignette: 0.0~1.0 (already normalized by Dart)
-        f.setValue(Double(_vignette) * 2.5, forKey: kCIInputIntensityKey)
+        f.setValue(Double(intensity) * 2.5, forKey: kCIInputIntensityKey)
         f.setValue(1.5, forKey: kCIInputRadiusKey)
         return f.outputImage ?? image
     }
 
-    private func applyGrain(_ image: CIImage) -> CIImage {
+    private func applyGrain(_ image: CIImage, intensity: Float) -> CIImage {
         guard let noise = CIFilter(name: "CIRandomGenerator")?.outputImage else { return image }
         let cropped = noise.cropped(to: image.extent)
         guard let mono = CIFilter(name: "CIColorMatrix") else { return image }
-        // _grain: 0.0~1.0 (already normalized by Dart)
-        let n = CGFloat(_grain) * 0.18
+        let n = CGFloat(intensity) * 0.18
         mono.setValue(cropped, forKey: kCIInputImageKey)
         mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputRVector")
         mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputGVector")

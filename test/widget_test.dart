@@ -3,7 +3,7 @@ import 'package:likethis/core/models/filter_model.dart';
 
 void main() {
   group('Like This — 기본 스모크 테스트', () {
-    test('BWFilters.all이 7종 로드됨', () {
+    test('BWFilters.all이 9종 로드됨', () {
       expect(BWFilters.all.length, equals(9));
     });
 

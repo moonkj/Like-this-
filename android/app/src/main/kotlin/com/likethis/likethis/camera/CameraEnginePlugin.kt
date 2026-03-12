@@ -112,6 +112,11 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 result.error("NOT_IMPLEMENTED", "Video crop is not supported on Android yet", null)
             }
 
+            "processAndSaveImage" -> {
+                // Android 미구현 — iOS 전용
+                result.error("NOT_IMPLEMENTED", "processAndSaveImage is not supported on Android yet", null)
+            }
+
             // ── 필터 채널 ─────────────────────────────────────────────────────────
             "loadLUT" -> {
                 val assetPath = call.argument<String>("assetPath") ?: ""

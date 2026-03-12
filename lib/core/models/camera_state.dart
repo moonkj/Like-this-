@@ -24,11 +24,12 @@ class CameraState {
     this.textureId,
     this.activeFilter = BWFilters.pureThis,
     this.filterIntensity = 1.0,
+    this.isNoneFilter = false,
     this.exposure = 0.0,
     this.contrast = 0.0,
-    this.grain = 20.0,
+    this.grain = 0.0,
     this.lightLeak = 0.0,
-    this.vignette = 15.0,
+    this.vignette = 0.0,
     this.dust = 0.0,
     this.bloom = 0.0,
     this.flashMode = FlashMode.off,
@@ -46,6 +47,9 @@ class CameraState {
 
   /// 필터 강도 슬라이더 (0.0 ~ 1.0)
   final double filterIntensity;
+
+  /// "없음" 버튼 선택 상태 — true이면 LUT 완전 비활성 (강도 슬라이더와 독립)
+  final bool isNoneFilter;
 
   /// 수직 스와이프로 조절 (-100 ~ +100)
   final double exposure;
@@ -95,6 +99,7 @@ class CameraState {
     int? textureId,
     FilterModel? activeFilter,
     double? filterIntensity,
+    bool? isNoneFilter,
     double? exposure,
     double? contrast,
     double? grain,
@@ -114,6 +119,7 @@ class CameraState {
     textureId: textureId ?? this.textureId,
     activeFilter: activeFilter ?? this.activeFilter,
     filterIntensity: filterIntensity ?? this.filterIntensity,
+    isNoneFilter: isNoneFilter ?? this.isNoneFilter,
     exposure: exposure ?? this.exposure,
     contrast: contrast ?? this.contrast,
     grain: grain ?? this.grain,

@@ -82,6 +82,35 @@ class CameraEngine {
     });
   }
 
+  /// 갤러리 이미지를 네이티브(CIImage)로 처리 후 JPEG 저장 — iOS 전용
+  /// colorMatrix: Flutter ColorFilter.matrix와 동일한 4×5 행렬 (20개 double)
+  /// vignette/grain: 0.0~1.0
+  /// cropX/Y/W/H: 정규화 크롭 좌표 (top-left 기준, 기본값 0,0,1,1 = 전체)
+  /// 반환: 저장된 JPEG 임시 파일 경로, 실패 시 null
+  static Future<String?> processAndSaveImage({
+    required String sourcePath,
+    required List<double> colorMatrix,
+    required double vignette,
+    required double grain,
+    required String outputPath,
+    double cropX = 0.0,
+    double cropY = 0.0,
+    double cropW = 1.0,
+    double cropH = 1.0,
+  }) async {
+    return _channel.invokeMethod<String>('processAndSaveImage', {
+      'sourcePath': sourcePath,
+      'colorMatrix': colorMatrix,
+      'vignette': vignette,
+      'grain': grain,
+      'outputPath': outputPath,
+      'cropX': cropX,
+      'cropY': cropY,
+      'cropW': cropW,
+      'cropH': cropH,
+    });
+  }
+
   /// 동영상 크롭 — 정규화 좌표 (0~1) 기준
   /// 반환: 크롭된 동영상 파일 경로, 실패 시 null
   static Future<String?> cropVideo({

@@ -38,6 +38,11 @@ class FilterEngine {
     });
   }
 
+  /// 없음 모드 — true이면 B&W 변환 포함 전체 파이프라인 바이패스 (원본 컬러)
+  static Future<void> setNoneMode(bool enabled) async {
+    await _channel.invokeMethod<void>('setNoneMode', {'enabled': enabled});
+  }
+
   /// 현재 프레임을 캡처하여 파일로 저장
   static Future<String?> captureProcessedFrame() async {
     return _channel.invokeMethod<String>('captureProcessedFrame');

@@ -549,6 +549,39 @@
 
 ---
 
+## Sprint 17 — 에디터 버그 수정 & 네이티브 저장 파이프라인 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 17-1: 에디터 UI 버그 4종 수정
+
+- [x] **필터 박스 위치 이동 버그** — `_FilterItem` 외곽 `SizedBox` 너비를 `selected ? 58 : 52` → 고정 `width: 64`로 변경, `crossAxisAlignment: CrossAxisAlignment.center` 추가
+- [x] **효과 슬라이더 드래그 후 탭 무응답** — 효과 아이콘 `GestureDetector`에 `behavior: HitTestBehavior.opaque` 추가 (Slider의 HorizontalDragGestureRecognizer 충돌 해결)
+- [x] **letterbox 영역에 효과 적용** — 비네팅·그레인 오버레이를 `Center + AspectRatio(_imageSize!.width/_imageSize!.height)`로 감싸 실제 이미지 영역에만 적용
+- [x] **사진 3:4 비율 저장 불일치** — `MFCameraSession.swift` photo capture 경로에 center-crop 추가: `(targetH = width * 4/3, yOffset = (height - targetH) / 2)`
+
+#### Sprint 17-2: 네이티브 CIImage 저장 파이프라인 (핵심)
+
+- **문제**: Flutter `picture.toImage()` (Impeller)가 대용량 HEIC 이미지에서 무음 다운스케일 or OOM → 갤러리 이미지 저장 시 작은 사이즈로 저장되는 버그
+- **해결**: Flutter Canvas 저장 제거 → iOS 네이티브 CIImage 파이프라인으로 전면 교체
+
+- [x] `CameraEnginePlugin.swift` — `processAndSaveImage` 케이스 추가:
+  - `UIImage(contentsOfFile:)` — HEIC/JPEG/PNG 전체 해상도 로드 + EXIF 방향 자동 보정
+  - `CIColorMatrix` — Flutter 4×5 ColorFilter 행렬 그대로 적용 (bias /255 변환)
+  - `CIVignette` 비네팅 적용
+  - `CIRandomGenerator + CISoftLightBlendMode` 그레인 적용
+  - 크롭: Flutter top-left Y → CIImage bottom-left Y 좌표 변환 `(1 - cropY - cropH) * height`
+  - `CIContext.createCGImage` + `UIImage.jpegData(compressionQuality: 0.92)` → JPEG 파일 저장
+- [x] `CameraEnginePlugin.kt` — `processAndSaveImage` NOT_IMPLEMENTED stub 추가
+- [x] `camera_engine.dart` — `processAndSaveImage()` static 메서드 추가 (sourcePath, colorMatrix 20개, vignette, grain, 크롭 좌표)
+- [x] `editor_screen.dart`:
+  - `_buildFilterMatrix()` 추출 — `_buildFilter()`와 내부 분리, 네이티브 저장에 행렬 값 직접 전달
+  - `_save()` 완전 교체 — `_loadSaveImage()` 제거, `CameraEngine.processAndSaveImage()` 단일 경로로 통합
+  - 소스 파일: `list[_currentIndex].originFile` 우선, 없으면 `_currentPath` 폴백
+  - 저장 포맷 PNG → JPEG (`.jpg`) 변경
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용

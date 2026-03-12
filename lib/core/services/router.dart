@@ -120,12 +120,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/video',
       pageBuilder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>;
+        final extra = state.extra as Map<String, dynamic>? ?? {};
         return CustomTransitionPage(
           key: state.pageKey,
           child: VideoPlayerScreen(
-            videoPath: extra['path'] as String,
-            assetId: extra['assetId'] as String,
+            videoPath: extra['path'] as String? ?? '',
+            assetId: extra['assetId'] as String? ?? '',
           ),
           transitionsBuilder: (context, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),

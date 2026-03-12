@@ -52,7 +52,7 @@ final class MFBeautyEngine {
     // MARK: - Soft Skin: 저주파 블러로 피부 결만 살짝 부드럽게
 
     private func applySoftSkin(_ image: CIImage, intensity: Float) -> CIImage {
-        let blurRadius = Double(intensity) * 3.0
+        let blurRadius = Double(intensity) * 8.0
         guard let blurred = CIFilter(
             name: "CIGaussianBlur",
             parameters: [kCIInputImageKey: image, kCIInputRadiusKey: blurRadius]
@@ -73,7 +73,7 @@ final class MFBeautyEngine {
     // MARK: - Glow Mono: 하이라이트 주변 소프트 글로우
 
     private func applyGlowMono(_ image: CIImage, intensity: Float) -> CIImage {
-        let bloom = Double(intensity) * 0.3
+        let bloom = Double(intensity) * 1.5
         guard let glow = CIFilter(
             name: "CIBloom",
             parameters: [
@@ -88,7 +88,7 @@ final class MFBeautyEngine {
     // MARK: - Silky: 미드톤 대비 낮추기 + 밝기 보정
 
     private func applySilky(_ image: CIImage, intensity: Float) -> CIImage {
-        let lift = Double(intensity) * 0.05
+        let lift = Double(intensity) * 0.18
         guard let toned = CIFilter(
             name: "CIToneCurve",
             parameters: [

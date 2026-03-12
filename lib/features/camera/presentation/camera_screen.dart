@@ -627,8 +627,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 overlayColor: AppColors.silver.withValues(alpha: 0.15),
               ),
               child: Slider(
-                value: camState.filterIntensity,
-                onChanged: (v) {
+                value: camState.isNoneFilter ? 0.0 : camState.filterIntensity,
+                // isNoneFilter일 때 슬라이더 비활성 — setFilter()로만 해제
+                onChanged: camState.isNoneFilter ? null : (v) {
                   ref.read(cameraProvider.notifier).setFilterIntensity(v);
                   _resetIntensityPanelTimer();
                 },
@@ -661,24 +662,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: _showBeautyPanel
-                  ? BeautyPanel(
-                      key: const ValueKey('beauty'),
-                      onChanged: (mode, intensity) {
-                        ref.read(cameraProvider.notifier).setBeauty(mode.name, intensity);
-                      },
-                    )
+                  ? const BeautyPanel(key: ValueKey('beauty'))
                   : _showFilterBar
                       ? FilterScrollBar(
                           key: const ValueKey('filter'),
                           filters: BWFilters.all,
                           selectedId: camState.activeFilter.id,
-                          isNoneSelected: camState.filterIntensity == 0,
-                          onNoneSelected: () => ref.read(cameraProvider.notifier).setFilterIntensity(0),
+                          isNoneSelected: camState.isNoneFilter,
+                          onNoneSelected: () => ref.read(cameraProvider.notifier).selectNone(),
                           onFilterSelected: (f) {
                             ref.read(cameraProvider.notifier).setFilter(f);
-                            if (camState.filterIntensity == 0) {
-                              ref.read(cameraProvider.notifier).setFilterIntensity(1.0);
-                            }
                           },
                         )
                       : const SizedBox.shrink(key: ValueKey('empty')),
@@ -913,12 +906,10 @@ class _SideCircleButton extends StatelessWidget {
   const _SideCircleButton({
     required this.icon,
     this.onTap,
-    this.size = 18,
     this.active = false,
   });
   final IconData icon;
   final VoidCallback? onTap;
-  final double size;
   final bool active;
 
   @override
@@ -936,7 +927,7 @@ class _SideCircleButton extends StatelessWidget {
           width: 0.5,
         ),
       ),
-      child: Icon(icon, color: Colors.white, size: size),
+      child: Icon(icon, color: Colors.white, size: 18),
     ),
   );
 }
@@ -985,6 +976,7 @@ class _GalleryThumb extends StatelessWidget {
                 File(path!),
                 width: 52, height: 52,
                 fit: BoxFit.cover,
+                cacheWidth: 104, cacheHeight: 104,
               )
             : Container(
                 decoration: BoxDecoration(

@@ -21,7 +21,8 @@ class PreferencesNotifier extends StateNotifier<UserPreferences> {
       final dir = await getApplicationDocumentsDirectory();
       _file = File('${dir.path}/likethis_prefs.json');
       if (_file!.existsSync()) {
-        final json = jsonDecode(_file!.readAsStringSync()) as Map<String, dynamic>;
+        final content = await _file!.readAsString();
+        final json = jsonDecode(content) as Map<String, dynamic>;
         state = UserPreferences.fromJson(json);
       }
     } catch (_) {

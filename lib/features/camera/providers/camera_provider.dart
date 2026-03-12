@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -22,6 +23,16 @@ class CameraNotifier extends StateNotifier<CameraState> {
       final textureId = await CameraEngine.initialize(
         frontCamera: state.lens == CameraLens.front,
       );
+      // 활성 필터의 기본 파라미터로 상태 동기화 (초기 grain/vignette 불일치 방지)
+      final f = state.activeFilter;
+      state = state.copyWith(
+        grain:     f.defaultGrain,
+        vignette:  f.defaultVignette,
+        lightLeak: f.defaultLightLeak,
+        dust:      f.defaultDust,
+        bloom:     f.defaultBloom,
+      );
+      await FilterEngine.setNoneMode(false);
       await _loadActiveFilter();
       await _syncFilterParams();
       state = state.copyWith(
@@ -51,20 +62,20 @@ class CameraNotifier extends StateNotifier<CameraState> {
   /// 수직 스와이프 → Exposure 조절
   /// [delta] 위 = 음수(밝게), 아래 = 양수(어둡게)
   void adjustExposure(double deltaY) {
-    final sensitivity = 0.15;
+    const sensitivity = 0.15;
     final newExposure = (state.exposure - deltaY * sensitivity).clamp(-100.0, 100.0);
     state = state.copyWith(exposure: newExposure);
     CameraEngine.setExposure(newExposure / 50.0); // -2.0 ~ +2.0 EV
-    _syncFilterParams();
+    unawaited(_syncFilterParams());
   }
 
   /// 수평 스와이프 → Contrast 조절
   /// [delta] 좌 = 음수(부드럽게), 우 = 양수(강렬하게)
   void adjustContrast(double deltaX) {
-    final sensitivity = 0.15;
+    const sensitivity = 0.15;
     final newContrast = (state.contrast + deltaX * sensitivity).clamp(-100.0, 100.0);
     state = state.copyWith(contrast: newContrast);
-    _syncFilterParams();
+    unawaited(_syncFilterParams());
   }
 
   /// 더블탭 → 7종 필터 프리셋 순차 변경
@@ -77,16 +88,24 @@ class CameraNotifier extends StateNotifier<CameraState> {
 
   Future<void> setFilter(FilterModel filter) async {
     state = state.copyWith(
-      activeFilter:  filter,
+      activeFilter:    filter,
       filterIntensity: filter.defaultIntensity,
-      grain:         filter.defaultGrain,
-      vignette:      filter.defaultVignette,
-      lightLeak:     filter.defaultLightLeak,
-      dust:          filter.defaultDust,
-      bloom:         filter.defaultBloom,
+      isNoneFilter:    false,
+      grain:           filter.defaultGrain,
+      vignette:        filter.defaultVignette,
+      lightLeak:       filter.defaultLightLeak,
+      dust:            filter.defaultDust,
+      bloom:           filter.defaultBloom,
     );
+    await FilterEngine.setNoneMode(false);
     await _loadActiveFilter();
     await _syncFilterParams();
+  }
+
+  /// "없음" 선택 — B&W 변환 포함 전체 파이프라인 바이패스 (원본 컬러)
+  void selectNone() {
+    state = state.copyWith(isNoneFilter: true);
+    unawaited(FilterEngine.setNoneMode(true));
   }
 
   void setGrain(double value) {
@@ -112,6 +131,18 @@ class CameraNotifier extends StateNotifier<CameraState> {
   void setBloom(double value) {
     state = state.copyWith(bloom: value.clamp(0.0, 100.0));
     _syncFilterParams();
+  }
+
+  void setExposure(double value) {
+    final clamped = value.clamp(-100.0, 100.0);
+    state = state.copyWith(exposure: clamped);
+    CameraEngine.setExposure(clamped / 50.0);
+    unawaited(_syncFilterParams());
+  }
+
+  void setContrast(double value) {
+    state = state.copyWith(contrast: value.clamp(-100.0, 100.0));
+    unawaited(_syncFilterParams());
   }
 
   void setFilterIntensity(double value) {
@@ -154,10 +185,14 @@ class CameraNotifier extends StateNotifier<CameraState> {
       final path = await CameraEngine.capturePhoto();
       state = state.copyWith(status: CameraStatus.ready);
       if (path != null) {
-        await PhotoManager.editor.saveImageWithPath(
-          path,
-          title: 'LikeThis_${DateTime.now().millisecondsSinceEpoch}',
-        );
+        // 썸네일 즉시 업데이트 (save 예외와 무관)
+        state = state.copyWith(lastCapturedPath: path);
+        try {
+          await PhotoManager.editor.saveImageWithPath(
+            path,
+            title: 'LikeThis_${DateTime.now().millisecondsSinceEpoch}',
+          );
+        } catch (_) {}
       }
       return path;
     } catch (e) {

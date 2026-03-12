@@ -259,10 +259,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
           canvas.drawRect(Rect.fromLTWH(0, 0, w, h), vPaint);
         }
 
-        final picture = recorder.endRecording();
-        final rendered = await picture.toImage(img.width, img.height);
-        final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
         img.dispose();
+        codec.dispose();
+        descriptor.dispose();
+
+        final picture = recorder.endRecording();
+        final rendered = await picture.toImage(w.round(), h.round());
+        final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
+        rendered.dispose();
 
         final name = 'likethis_batch_${DateTime.now().millisecondsSinceEpoch}_$_processedCount.png';
         final outFile = File('${dir.path}/$name');

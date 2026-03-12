@@ -10,8 +10,8 @@ void main() {
       expect(ids.length, equals(uniqueIds.length));
     });
 
-    test('BWFilters.all은 정확히 7종을 포함한다', () {
-      expect(BWFilters.all.length, equals(7));
+    test('BWFilters.all은 정확히 9종을 포함한다', () {
+      expect(BWFilters.all.length, equals(9));
     });
 
     test('모든 필터의 LUT 파일명은 bw_로 시작한다', () {
@@ -69,9 +69,9 @@ void main() {
         expect(next.id, equals(BWFilters.all[1].id));
       });
 
-      test('7번 순환하면 원래 필터로 돌아온다', () {
+      test('전체 필터 수만큼 순환하면 원래 필터로 돌아온다', () {
         var current = BWFilters.all.first;
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < BWFilters.all.length; i++) {
           current = BWFilters.next(current.id);
         }
         expect(current.id, equals(BWFilters.all.first.id));
@@ -88,6 +88,24 @@ void main() {
       test('다른 id를 가진 FilterModel은 다르다', () {
         expect(BWFilters.pureThis, isNot(equals(BWFilters.deepNoir)));
       });
+
+      test('hashCode는 id 기반이다', () {
+        final a = BWFilters.pureThis;
+        final b = BWFilters.pureThis.copyWith(isFavorite: true);
+        expect(a.hashCode, equals(b.hashCode));
+        expect(a.hashCode, isNot(equals(BWFilters.deepNoir.hashCode)));
+      });
+
+      test('Set에 넣을 때 중복 제거된다', () {
+        final set = {BWFilters.pureThis, BWFilters.pureThis.copyWith(isFavorite: true)};
+        expect(set.length, equals(1));
+      });
+    });
+
+    test('copyWith isFavorite 미전달 시 기존 값 유지', () {
+      final favorited = BWFilters.pureThis.copyWith(isFavorite: true);
+      final again = favorited.copyWith(defaultIntensity: 0.5);
+      expect(again.isFavorite, isTrue); // isFavorite ?? this.isFavorite 경로
     });
   });
 
@@ -103,6 +121,11 @@ void main() {
 
     test('Pure This 필터는 특수 이펙트 없음', () {
       expect(BWFilters.pureThis.enabledEffects, isEmpty);
+    });
+
+    test('Pure This는 grain/vignette 기본값이 0이다', () {
+      expect(BWFilters.pureThis.defaultGrain, equals(0.0));
+      expect(BWFilters.pureThis.defaultVignette, equals(0.0));
     });
   });
 }

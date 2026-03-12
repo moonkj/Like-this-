@@ -247,8 +247,17 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptu
         }
         if videoRecorder.isRecording {
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            // 녹화 프레임은 비교 분할선 없이 필터만 적용
-            let captureFrame = bwEngine.buildImageForCapture(from: inputImage)
+            var captureFrame = bwEngine.buildImageForCapture(from: inputImage)
+            // 3:4 비율로 center-crop (세로 영상: 1080×1920 → 1080×1440)
+            let ext = captureFrame.extent
+            if ext.height > ext.width {
+                let targetH = (ext.width * 4.0 / 3.0).rounded()
+                let yOff    = ((ext.height - targetH) / 2.0).rounded()
+                captureFrame = captureFrame.cropped(to: CGRect(
+                    x: ext.origin.x, y: ext.origin.y + yOff,
+                    width: ext.width, height: targetH
+                ))
+            }
             videoRecorder.appendVideo(ciImage: captureFrame, context: bwEngine.context, at: pts)
         }
     }
@@ -261,16 +270,32 @@ extension MFCameraSession: AVCapturePhotoCaptureDelegate {
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
         defer { photoCaptureCompletion = nil }
-        guard error == nil, let data = photo.fileDataRepresentation(),
-              let ciInput = CIImage(data: data) else {
+        guard error == nil, let data = photo.fileDataRepresentation() else {
             photoCaptureCompletion?(nil); return
         }
 
-        // B&W 엔진 적용 — 캡처 전용 (비교 분할선 제외)
-        let processed = bwEngine.buildImageForCapture(from: ciInput)
+        // JPEG → CIImage. 비디오 스트림과 동일: 픽셀 크기로만 회전 여부 판단
+        // (metadata orientation은 신뢰도가 낮음 — 이미 portrait인 경우 오회전 발생)
+        var ciInput = CIImage(data: data) ?? CIImage.empty()
+        if ciInput.extent.width > ciInput.extent.height {
+            ciInput = ciInput.oriented(.right)   // landscape 센서 데이터만 회전
+        }
+
+        var processed = bwEngine.buildImageForCapture(from: ciInput)
+        // 3:4 비율로 center-crop (사진: 1080×1920 → 1080×1440)
+        let pExt = processed.extent
+        if pExt.height > pExt.width {
+            let targetH = (pExt.width * 4.0 / 3.0).rounded()
+            let yOff    = ((pExt.height - targetH) / 2.0).rounded()
+            processed = processed.cropped(to: CGRect(
+                x: pExt.origin.x, y: pExt.origin.y + yOff,
+                width: pExt.width, height: targetH
+            ))
+        }
         guard let cgImage = bwEngine.context.createCGImage(processed, from: processed.extent) else {
             photoCaptureCompletion?(nil); return
         }
+
         let uiImage = UIImage(cgImage: cgImage)
         guard let jpegData = uiImage.jpegData(compressionQuality: 0.95) else {
             photoCaptureCompletion?(nil); return

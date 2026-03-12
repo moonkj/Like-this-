@@ -82,8 +82,8 @@ abstract final class BWFilters {
     lutFileName: 'bw_pure.cube',
     description: '가장 화사하고 깨끗한 흑백',
     defaultIntensity: 1.0,
-    defaultGrain: 10.0,
-    defaultVignette: 10.0,
+    defaultGrain: 0.0,
+    defaultVignette: 0.0,
     enabledEffects: [],
     fallbackColor: Color(0xFF2A2A2A),
   );

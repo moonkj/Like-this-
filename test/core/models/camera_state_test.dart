@@ -1,7 +1,6 @@
 // 🔴 RED → 🟢 GREEN → 🔵 REFACTOR
 import 'package:flutter_test/flutter_test.dart';
 import 'package:likethis/core/models/camera_state.dart';
-import 'package:likethis/core/models/filter_model.dart';
 
 void main() {
   group('CameraState', () {
@@ -28,6 +27,25 @@ void main() {
     test('초기 필터는 Pure This다', () {
       const state = CameraState();
       expect(state.activeFilter.id, equals('bw_pure'));
+    });
+
+    test('초기 isNoneFilter는 false다', () {
+      const state = CameraState();
+      expect(state.isNoneFilter, isFalse);
+    });
+
+    test('isNoneFilter를 true로 설정하면 유지된다', () {
+      const state = CameraState(isNoneFilter: true);
+      expect(state.isNoneFilter, isTrue);
+      // copyWith 시 다른 필드 변경해도 isNoneFilter 유지
+      final updated = state.copyWith(exposure: 10.0);
+      expect(updated.isNoneFilter, isTrue);
+    });
+
+    test('isNoneFilter copyWith으로 false로 변경 가능', () {
+      const state = CameraState(isNoneFilter: true);
+      final updated = state.copyWith(isNoneFilter: false);
+      expect(updated.isNoneFilter, isFalse);
     });
 
     group('copyWith', () {

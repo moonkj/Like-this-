@@ -160,6 +160,118 @@ final class LikeThisCamera: NSObject {
                     }
                 }
 
+            // ── 갤러리 이미지 처리 후 저장 ───────────────────────────────────────
+            case "processAndSaveImage":
+                guard let args = call.arguments as? [String: Any],
+                      let sourcePath  = args["sourcePath"]  as? String,
+                      let matrixVals  = args["colorMatrix"]  as? [Double],
+                      let outputPath  = args["outputPath"]  as? String,
+                      matrixVals.count == 20
+                else {
+                    result(FlutterError(code: "INVALID_ARGS", message: "Arguments missing", details: nil))
+                    return
+                }
+                let vigIntensity   = Float((args["vignette"] as? Double) ?? 0.0)
+                let grainIntensity = Float((args["grain"]    as? Double) ?? 0.0)
+                let cropX = CGFloat((args["cropX"] as? Double) ?? 0.0)
+                let cropY = CGFloat((args["cropY"] as? Double) ?? 0.0)
+                let cropW = CGFloat((args["cropW"] as? Double) ?? 1.0)
+                let cropH = CGFloat((args["cropH"] as? Double) ?? 1.0)
+                let hasCrop = cropW < 0.999 || cropH < 0.999 || cropX > 0.001 || cropY > 0.001
+
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    guard let self = self else { return }
+
+                    // 1. 이미지 로드 — UIImage가 HEIC/JPEG/PNG 및 EXIF 방향 자동 처리
+                    guard let uiSrc = UIImage(contentsOfFile: sourcePath),
+                          let cgSrc = uiSrc.cgImage else {
+                        DispatchQueue.main.async {
+                            result(FlutterError(code: "LOAD_FAILED", message: "Cannot load: \(sourcePath)", details: nil))
+                        }
+                        return
+                    }
+                    var processed = CIImage(cgImage: cgSrc)
+
+                    // 2. ColorFilter 적용 (Flutter 4×5 행렬 → CIColorMatrix, bias /255)
+                    let m = matrixVals
+                    if let f = CIFilter(name: "CIColorMatrix") {
+                        f.setValue(processed, forKey: kCIInputImageKey)
+                        f.setValue(CIVector(x: m[0],  y: m[1],  z: m[2],  w: m[3]),  forKey: "inputRVector")
+                        f.setValue(CIVector(x: m[5],  y: m[6],  z: m[7],  w: m[8]),  forKey: "inputGVector")
+                        f.setValue(CIVector(x: m[10], y: m[11], z: m[12], w: m[13]), forKey: "inputBVector")
+                        f.setValue(CIVector(x: m[15], y: m[16], z: m[17], w: m[18]), forKey: "inputAVector")
+                        f.setValue(CIVector(x: m[4]/255, y: m[9]/255, z: m[14]/255, w: m[19]/255),
+                                   forKey: "inputBiasVector")
+                        if let out = f.outputImage { processed = out }
+                    }
+
+                    // 3. 비네팅
+                    if vigIntensity > 0.01 {
+                        if let f = CIFilter(name: "CIVignette") {
+                            f.setValue(processed, forKey: kCIInputImageKey)
+                            f.setValue(Double(vigIntensity) * 2.5, forKey: kCIInputIntensityKey)
+                            f.setValue(1.5, forKey: kCIInputRadiusKey)
+                            if let out = f.outputImage { processed = out }
+                        }
+                    }
+
+                    // 4. 그레인
+                    if grainIntensity > 0.01 {
+                        if let noise = CIFilter(name: "CIRandomGenerator")?.outputImage {
+                            let croppedNoise = noise.cropped(to: processed.extent)
+                            if let mono = CIFilter(name: "CIColorMatrix") {
+                                let n = CGFloat(grainIntensity) * 0.18
+                                mono.setValue(croppedNoise, forKey: kCIInputImageKey)
+                                mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputRVector")
+                                mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputGVector")
+                                mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputBVector")
+                                mono.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputAVector")
+                                if let grainImg = mono.outputImage,
+                                   let blend = CIFilter(name: "CISoftLightBlendMode") {
+                                    blend.setValue(grainImg, forKey: kCIInputImageKey)
+                                    blend.setValue(processed, forKey: kCIInputBackgroundImageKey)
+                                    if let out = blend.outputImage { processed = out }
+                                }
+                            }
+                        }
+                    }
+
+                    // 5. 크롭 (Flutter top-left Y → CIImage bottom-left Y 변환)
+                    if hasCrop {
+                        let ext = processed.extent
+                        let ci_x = ext.origin.x + cropX * ext.width
+                        let ci_y = ext.origin.y + (1.0 - cropY - cropH) * ext.height
+                        processed = processed.cropped(to: CGRect(
+                            x: ci_x, y: ci_y,
+                            width: cropW * ext.width, height: cropH * ext.height
+                        ))
+                    }
+
+                    // 6. JPEG 렌더링 & 저장
+                    guard let cgOut = self.bwEngine.context.createCGImage(processed, from: processed.extent) else {
+                        DispatchQueue.main.async {
+                            result(FlutterError(code: "RENDER_FAILED", message: "createCGImage failed", details: nil))
+                        }
+                        return
+                    }
+                    guard let jpegData = UIImage(cgImage: cgOut).jpegData(compressionQuality: 0.92) else {
+                        DispatchQueue.main.async {
+                            result(FlutterError(code: "ENCODE_FAILED", message: "jpegData failed", details: nil))
+                        }
+                        return
+                    }
+                    let outURL = URL(fileURLWithPath: outputPath)
+                    try? FileManager.default.removeItem(at: outURL)
+                    do {
+                        try jpegData.write(to: outURL)
+                        DispatchQueue.main.async { result(outputPath) }
+                    } catch {
+                        DispatchQueue.main.async {
+                            result(FlutterError(code: "WRITE_FAILED", message: error.localizedDescription, details: nil))
+                        }
+                    }
+                }
+
             default:
                 result(FlutterMethodNotImplemented)
             }
@@ -173,6 +285,10 @@ final class LikeThisCamera: NSObject {
                 if let path = args?["assetPath"] as? String {
                     self.bwEngine.loadLUT(assetPath: path)
                 }
+                result(nil)
+            case "setNoneMode":
+                let enabled = args?["enabled"] as? Bool ?? false
+                self.bwEngine.setNoneMode(enabled)
                 result(nil)
             case "updateParams":
                 let lutIntensity = Float((args?["lutIntensity"] as? Double) ?? 1.0)
