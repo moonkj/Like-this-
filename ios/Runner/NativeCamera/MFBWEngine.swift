@@ -50,6 +50,7 @@ final class MFBWEngine {
     private var _dust: Float = 0.0
     private var _bloom: Float = 0.0
     private var _compareMode: Bool = false
+    private var _splitPosition: CGFloat = 0.5 // 0.0(좌)~1.0(우)
     private var _beautyMode: String = "none"
     private var _beautyIntensity: Float = 0.0
     let beautyEngine = MFBeautyEngine()
@@ -69,6 +70,11 @@ final class MFBWEngine {
 
     func setCompareMode(_ enabled: Bool) {
         _compareMode = enabled
+        if !enabled { _splitPosition = 0.5 }
+    }
+
+    func setSplitPosition(_ position: CGFloat) {
+        _splitPosition = max(0.05, min(0.95, position))
     }
 
     func setBeauty(mode: String, intensity: Float) {
@@ -110,14 +116,14 @@ final class MFBWEngine {
         return beautyEngine.apply(to: image, mode: mode, intensity: _beautyIntensity)
     }
 
-    /// 비교 모드: 왼쪽 절반 = 원본 컬러, 오른쪽 절반 = B&W 필터 적용
+    /// 비교 모드: 왼쪽 = 원본 컬러, 오른쪽 = B&W (splitPosition 기준)
     private func makeSplitImage(original: CIImage, processed: CIImage) -> CIImage {
-        let extent = original.extent
-        let midX   = extent.midX
+        let extent  = original.extent
+        let splitX  = extent.minX + extent.width * _splitPosition
         let leftRect  = CGRect(x: extent.minX, y: extent.minY,
-                               width: midX - extent.minX, height: extent.height)
-        let rightRect = CGRect(x: midX, y: extent.minY,
-                               width: extent.maxX - midX, height: extent.height)
+                               width: splitX - extent.minX, height: extent.height)
+        let rightRect = CGRect(x: splitX, y: extent.minY,
+                               width: extent.maxX - splitX, height: extent.height)
         let leftHalf  = original.cropped(to: leftRect)
         let rightHalf = processed.cropped(to: rightRect)
         guard let comp = CIFilter(name: "CISourceOverCompositing") else { return original }

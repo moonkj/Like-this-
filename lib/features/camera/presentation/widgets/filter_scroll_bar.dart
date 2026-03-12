@@ -12,11 +12,15 @@ class FilterScrollBar extends StatefulWidget {
     required this.filters,
     required this.selectedId,
     required this.onFilterSelected,
+    this.onNoneSelected,
+    this.isNoneSelected = false,
   });
 
   final List<FilterModel> filters;
   final String selectedId;
   final ValueChanged<FilterModel> onFilterSelected;
+  final VoidCallback? onNoneSelected;
+  final bool isNoneSelected;
 
   @override
   State<FilterScrollBar> createState() => _FilterScrollBarState();
@@ -64,12 +68,21 @@ class _FilterScrollBarState extends State<FilterScrollBar> {
               padding: const EdgeInsets.symmetric(
                 horizontal: AppDimensions.spaceM,
               ),
-              itemCount: widget.filters.length,
+              itemCount: widget.filters.length + 1, // +1 for 없음
               separatorBuilder: (_, __) =>
                   const SizedBox(width: AppDimensions.spaceS),
               itemBuilder: (context, index) {
-                final filter = widget.filters[index];
-                final isSelected = filter.id == widget.selectedId;
+                if (index == 0) {
+                  return _NoneThumb(
+                    isSelected: widget.isNoneSelected,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      widget.onNoneSelected?.call();
+                    },
+                  );
+                }
+                final filter = widget.filters[index - 1];
+                final isSelected = !widget.isNoneSelected && filter.id == widget.selectedId;
                 return _FilterThumb(
                   filter: filter,
                   isSelected: isSelected,
@@ -84,6 +97,59 @@ class _FilterScrollBarState extends State<FilterScrollBar> {
           ),
           const SizedBox(height: AppDimensions.spaceS),
         ],
+      ),
+    );
+  }
+}
+
+class _NoneThumb extends StatelessWidget {
+  const _NoneThumb({required this.isSelected, required this.onTap});
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final w = isSelected
+        ? AppDimensions.filterThumbSelectedW
+        : AppDimensions.filterThumbW;
+    final h = isSelected
+        ? AppDimensions.filterThumbSelectedH
+        : AppDimensions.filterThumbH;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        width: w,
+        child: Column(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: w, height: h,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(AppDimensions.filterThumbRadius),
+                border: isSelected
+                    ? Border.all(color: AppColors.filterSelected, width: AppDimensions.filterBorderWidth)
+                    : Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppDimensions.filterThumbRadius - 1),
+                child: const Center(
+                  child: Icon(Icons.block, color: Color(0xFF555555), size: 20),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '없음',
+              style: isSelected
+                  ? AppTypography.filterNameSelected
+                  : AppTypography.filterName,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

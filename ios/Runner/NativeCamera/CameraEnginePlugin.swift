@@ -81,6 +81,11 @@ final class LikeThisCamera: NSObject {
                 self.bwEngine.setCompareMode(enable)
                 result(nil)
 
+            case "setSplitPosition":
+                let pos = CGFloat((call.arguments as? [String: Any])?["position"] as? Double ?? 0.5)
+                self.bwEngine.setSplitPosition(pos)
+                result(nil)
+
             // ── 뷰티 모드 ────────────────────────────────────────────────────
             case "setBeauty":
                 let mode      = (call.arguments as? [String: Any])?["mode"]      as? String ?? "none"

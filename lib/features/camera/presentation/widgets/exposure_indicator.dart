@@ -24,9 +24,9 @@ class ExposureIndicator extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.glassLight,
+          color: Colors.black.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.glassBorder),
+          border: Border.all(color: Colors.white24, width: 0.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -75,9 +75,9 @@ class ContrastIndicator extends StatelessWidget {
         width: 200,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.glassLight,
+          color: Colors.black.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.glassBorder),
+          border: Border.all(color: Colors.white24, width: 0.5),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

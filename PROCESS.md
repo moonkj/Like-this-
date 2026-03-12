@@ -394,6 +394,48 @@
 
 ---
 
+## Sprint 13 — 카메라 UI/UX 개선 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 13-1: 오디오 녹음 추가
+- [x] `MFCameraSession` — `AVCaptureAudioDataOutput` + 마이크 입력 추가
+- [x] `MFVideoRecorder` — AAC 44100Hz 모노 오디오 트랙 + `appendAudio()` 구현
+- [x] PTS 오프셋 보정 (`CMSampleBufferCreateCopyWithNewTiming`)
+
+#### Sprint 13-2: 전면 카메라 플립 버그 수정
+- [x] `flipCamera()` — 오디오 입력 재추가 누락 수정
+- [x] `fixVideoOrientation()` — iOS 17+ `videoRotationAngle = 90` + 하위호환 fallback
+- [x] CIImage 레벨 landscape 보정 (`oriented(.right)`)
+- [x] `outputBufferPool = nil` 리셋 (카메라 전환 후 치수 불일치 방지)
+
+#### Sprint 13-3: 비교(Compare) 기능 완성
+- [x] 비교 버튼 토글 방식으로 변경 (탭 on/off)
+- [x] `MFBWEngine.makeSplitImage()` — 동적 분할 위치 (`splitPosition` 0.0~1.0)
+- [x] Flutter → 네이티브 `setSplitPosition` 채널 연결
+- [x] 수평 스와이프 시 분할선 + 필터 경계 동시 이동
+- [x] 분할선 핸들 좌우에 "원본" / 현재 필터명 레이블 표시
+- [x] 비교 오버레이 `IgnorePointer` 처리 (강도 슬라이더 터치 보장)
+
+#### Sprint 13-4: 제스처 개선
+- [x] EV/대비 동시 표시 버그 수정 (전환 시 반대쪽 즉시 숨김)
+- [x] Dead zone 6px 추가 (살짝 터치 오반응 방지)
+- [x] EV/대비 민감도 0.3 → 0.15
+- [x] 비교 모드 수평 스와이프 → 분할선 이동 (대비 조절 비활성)
+
+#### Sprint 13-5: UI 정리
+- [x] 사이드 버튼 크기 44 → 36px
+- [x] 필터 강도 슬라이더 높이 56 → 40px, bottom 20 → 8
+- [x] EV/대비 인디케이터 강도 바 위로 이동 (겹침 방지)
+- [x] 사이드 버튼 5초 자동 숨김 + 터치 시 타이머 리셋
+- [x] 사이드 버튼 투명 시 `IgnorePointer` (슬라이더 간섭 제거)
+- [x] 사진/동영상 전환 시 버튼 흔들림 수정 (SizedBox 84px 고정)
+- [x] 상단 바 그라디언트 제거
+- [x] 필터 바 기본값 열림, 필터/효과 버튼 상호 전환(닫힘 없음)
+- [x] 필터 목록 맨 앞 "없음" 아이템 추가
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용

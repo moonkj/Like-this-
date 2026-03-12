@@ -51,7 +51,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
   /// 수직 스와이프 → Exposure 조절
   /// [delta] 위 = 음수(밝게), 아래 = 양수(어둡게)
   void adjustExposure(double deltaY) {
-    final sensitivity = 0.3;
+    final sensitivity = 0.15;
     final newExposure = (state.exposure - deltaY * sensitivity).clamp(-100.0, 100.0);
     state = state.copyWith(exposure: newExposure);
     CameraEngine.setExposure(newExposure / 50.0); // -2.0 ~ +2.0 EV
@@ -61,7 +61,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
   /// 수평 스와이프 → Contrast 조절
   /// [delta] 좌 = 음수(부드럽게), 우 = 양수(강렬하게)
   void adjustContrast(double deltaX) {
-    final sensitivity = 0.3;
+    final sensitivity = 0.15;
     final newContrast = (state.contrast + deltaX * sensitivity).clamp(-100.0, 100.0);
     state = state.copyWith(contrast: newContrast);
     _syncFilterParams();

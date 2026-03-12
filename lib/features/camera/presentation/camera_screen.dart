@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/models/camera_state.dart';
 import '../../../core/models/filter_model.dart';
 import '../providers/camera_provider.dart';
+import '../../../native_plugins/camera_engine/camera_engine.dart';
 import 'widgets/shutter_button.dart';
 import 'widgets/filter_scroll_bar.dart';
 import 'widgets/exposure_indicator.dart';
@@ -31,12 +32,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   // ── 패널 토글 ────────────────────────────────────────────────────────────
   bool _showBeautyPanel = false;
-  bool _showFilterBar = false;
+  bool _showFilterBar = true; // 기본값: 필터 바 열림
   bool _showIntensityPanel = false;
 
   // ── 모드 ─────────────────────────────────────────────────────────────────
   bool _isVideoMode = false;
   bool _isComparing = false;
+  double _comparePosition = 0.5; // 분할선 위치 (0.0 = 좌, 1.0 = 우)
 
   // ── 타이머 ───────────────────────────────────────────────────────────────
   int _timerSeconds = 0;      // 0 = 꺼짐
@@ -55,6 +57,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Timer? _indicatorTimer;
   Timer? _filterNameTimer;
   Timer? _zoomTimer;
+  Timer? _sideButtonTimer;
+  bool _showSideButtons = true;
   VoidCallback? _routeListener;
 
   @override
@@ -63,6 +67,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(cameraProvider.notifier).initialize();
+    });
+    _resetSideButtonTimer();
+  }
+
+  void _resetSideButtonTimer() {
+    _sideButtonTimer?.cancel();
+    if (!_showSideButtons) setState(() => _showSideButtons = true);
+    _sideButtonTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _showSideButtons = false);
     });
   }
 
@@ -116,6 +129,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   void _onScaleStart(ScaleStartDetails d) {
     _baseZoom = _currentZoom;
     _lastFocalPoint = d.focalPoint;
+    _resetSideButtonTimer();
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
@@ -134,16 +148,24 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         });
       }
     } else if (_lastFocalPoint != null) {
-      // 단일 손가락 드래그 → 노출/대비
+      // 단일 손가락 드래그 (dead zone 6px 미만 무시)
       final delta = d.focalPoint - _lastFocalPoint!;
-      if (delta.dy.abs() > delta.dx.abs()) {
+      if (delta.distance < 6) return;
+      if (_isComparing && delta.dx.abs() > delta.dy.abs()) {
+        // 비교 모드: 수평 스와이프 → 분할선 이동
+        final screenW = context.size?.width ?? 300;
+        final newPos = (_comparePosition + delta.dx / screenW).clamp(0.05, 0.95);
+        setState(() { _comparePosition = newPos; });
+        CameraEngine.setSplitPosition(newPos);
+      } else if (delta.dy.abs() > delta.dx.abs()) {
         ref.read(cameraProvider.notifier).adjustExposure(delta.dy);
-        setState(() => _showExposureIndicator = true);
-      } else {
+        setState(() { _showExposureIndicator = true; _showContrastIndicator = false; });
+        _resetIndicatorTimer();
+      } else if (!_isComparing) {
         ref.read(cameraProvider.notifier).adjustContrast(delta.dx);
-        setState(() => _showContrastIndicator = true);
+        setState(() { _showContrastIndicator = true; _showExposureIndicator = false; });
+        _resetIndicatorTimer();
       }
-      _resetIndicatorTimer();
       _lastFocalPoint = d.focalPoint;
     }
   }
@@ -161,6 +183,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   void _onTap() {
+    _resetSideButtonTimer();
     _tapCount++;
     _tapTimer?.cancel();
     _tapTimer = Timer(const Duration(milliseconds: 250), () {
@@ -238,7 +261,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   void _stopCompare() {
-    setState(() => _isComparing = false);
+    setState(() { _isComparing = false; _comparePosition = 0.5; });
     ref.read(cameraProvider.notifier).setCompareMode(false);
   }
 
@@ -272,7 +295,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   // bottom: 100 = slider(bottom:20, h:56) + overlay_radius(20) + buffer(4)
                   if (camState.isReady)
                     Positioned(
-                      top: 0, left: 0, right: 0,
+                      top: 0, left: 0, right: 60, // 우측 60px 제외 (사이드 버튼 44+12+buffer)
                       bottom: _showIntensityPanel ? 100 : 0,
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
@@ -289,33 +312,40 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     child: _buildTopBar(camState),
                   ),
 
-                  // 우측 플로팅 버튼
+                  // 우측 플로팅 버튼 (5초 후 자동 숨김)
                   Positioned(
                     right: 12, bottom: 80,
-                    child: _buildSideButtons(camState),
+                    child: IgnorePointer(
+                      ignoring: !_showSideButtons,
+                      child: AnimatedOpacity(
+                        opacity: _showSideButtons ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 400),
+                        child: _buildSideButtons(camState),
+                      ),
+                    ),
                   ),
 
                   // 필터 강도 바
                   if (_showIntensityPanel)
                     Positioned(
-                      bottom: 20, left: 16, right: 16,
+                      bottom: 8, left: 16, right: 16,
                       child: _buildIntensityBar(camState),
                     ),
 
-                  // Exposure 인디케이터
+                  // Exposure 인디케이터 (왼쪽 하단, 강도 바 위)
                   Positioned(
-                    left: 16, top: 0, bottom: 0,
-                    child: Center(
-                      child: ExposureIndicator(
-                        exposure: camState.exposure,
-                        visible: _showExposureIndicator,
-                      ),
+                    left: 16,
+                    bottom: _showIntensityPanel ? 58 : 24,
+                    child: ExposureIndicator(
+                      exposure: camState.exposure,
+                      visible: _showExposureIndicator,
                     ),
                   ),
 
-                  // Contrast 인디케이터
+                  // Contrast 인디케이터 (강도 바 위)
                   Positioned(
-                    bottom: 16, left: 0, right: 0,
+                    bottom: _showIntensityPanel ? 58 : 16,
+                    left: 0, right: 0,
                     child: Center(
                       child: ContrastIndicator(
                         contrast: camState.contrast,
@@ -341,8 +371,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
                   // 비교 모드 분할 오버레이
                   if (_isComparing)
-                    const Positioned.fill(
-                      child: _CompareSplitOverlay(),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: _CompareSplitOverlay(
+                          position: _comparePosition,
+                          filterName: camState.activeFilter.name,
+                        ),
+                      ),
                     ),
 
                   // 타이머 카운트다운
@@ -438,13 +473,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Widget _buildTopBar(CameraState camState) {
     return Container(
       padding: const EdgeInsets.only(top: 10, left: 16, right: 16, bottom: 10),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0x99000000), Colors.transparent],
-        ),
-      ),
+      decoration: const BoxDecoration(),
       child: Row(
         children: [
           // 플래시 버튼 — off/on/auto 순환
@@ -479,9 +508,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       children: [
         // 타이머
         GestureDetector(
-          onTap: _cycleTimer,
+          onTap: () { _resetSideButtonTimer(); _cycleTimer(); },
           child: Container(
-            width: 44, height: 44,
+            width: 36, height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _timerSeconds > 0
@@ -498,13 +527,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                       '${_timerSeconds}s',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   )
-                : const Icon(Icons.timer_outlined,
-                    color: Colors.white, size: 22),
+                : const Icon(Icons.timer_outlined, color: Colors.white, size: 18),
           ),
         ),
         const SizedBox(height: 12),
@@ -514,19 +542,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           icon: Icons.tune,
           active: _showIntensityPanel,
           onTap: () {
+            _resetSideButtonTimer();
             HapticFeedback.selectionClick();
             setState(() => _showIntensityPanel = !_showIntensityPanel);
           },
         ),
         const SizedBox(height: 12),
 
-        // 비교 — 길게 눌러서 원본 표시
+        // 비교 — 탭으로 토글 (비교선 on/off)
         GestureDetector(
-          onLongPressStart: (_) => _startCompare(),
-          onLongPressEnd: (_) => _stopCompare(),
-          onTap: () => HapticFeedback.selectionClick(),
+          onTap: () {
+            _resetSideButtonTimer();
+            HapticFeedback.selectionClick();
+            if (_isComparing) _stopCompare(); else _startCompare();
+          },
           child: Container(
-            width: 44, height: 44,
+            width: 36, height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _isComparing
@@ -540,7 +571,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             child: Icon(
               Icons.compare,
               color: _isComparing ? AppColors.silver : Colors.white,
-              size: 22,
+              size: 18,
             ),
           ),
         ),
@@ -549,7 +580,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         // 설정
         _SideCircleButton(
           icon: Icons.settings_outlined,
-          onTap: () => context.push('/settings'),
+          onTap: () { _resetSideButtonTimer(); context.push('/settings'); },
         ),
       ],
     );
@@ -557,24 +588,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   Widget _buildIntensityBar(CameraState camState) {
     return Container(
-      height: 56,
+      height: 40,
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white24, width: 0.5),
       ),
       child: Row(
         children: [
-          const SizedBox(width: 16),
-          const Icon(Icons.tune, color: AppColors.textSecondary, size: 15),
+          const SizedBox(width: 14),
+          const Icon(Icons.wb_sunny_outlined, color: AppColors.textSecondary, size: 14),
           Expanded(
             child: SliderTheme(
               data: SliderThemeData(
-                trackHeight: 3,
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 10),
-                overlayShape:
-                    const RoundSliderOverlayShape(overlayRadius: 20),
+                trackHeight: 2,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
                 activeTrackColor: AppColors.silver,
                 inactiveTrackColor: Colors.white24,
                 thumbColor: AppColors.white,
@@ -588,15 +617,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
           ),
           SizedBox(
-            width: 36,
+            width: 40,
             child: Text(
-              '${(camState.filterIntensity * 100).round()}',
+              '${(camState.filterIntensity * 100).round()}%',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 11),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
         ],
       ),
     );
@@ -626,8 +654,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                           key: const ValueKey('filter'),
                           filters: BWFilters.all,
                           selectedId: camState.activeFilter.id,
-                          onFilterSelected: (f) =>
-                              ref.read(cameraProvider.notifier).setFilter(f),
+                          isNoneSelected: camState.filterIntensity == 0,
+                          onNoneSelected: () => ref.read(cameraProvider.notifier).setFilterIntensity(0),
+                          onFilterSelected: (f) {
+                            ref.read(cameraProvider.notifier).setFilter(f);
+                            if (camState.filterIntensity == 0) {
+                              ref.read(cameraProvider.notifier).setFilterIntensity(1.0);
+                            }
+                          },
                         )
                       : const SizedBox.shrink(key: ValueKey('empty')),
             ),
@@ -675,29 +709,31 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         active: _showFilterBar,
                         onTap: () {
                           HapticFeedback.selectionClick();
-                          setState(() {
-                            _showFilterBar = !_showFilterBar;
-                            if (_showFilterBar) _showBeautyPanel = false;
-                          });
+                          setState(() { _showFilterBar = true; _showBeautyPanel = false; });
                         },
                       ),
                     ],
                   ),
                 ),
 
-                // 셔터 / 동영상 셔터
-                _isVideoMode
-                    ? _VideoShutterButton(
-                        isRecording: camState.isRecording,
-                        onTap: () =>
-                            ref.read(cameraProvider.notifier).toggleRecording(),
-                      )
-                    : ShutterButton(
-                        isCapturing:
-                            camState.status == CameraStatus.capturing ||
-                                _isCountingDown,
-                        onTap: _captureWithTimer,
-                      ),
+                // 셔터 / 동영상 셔터 (84px 고정으로 레이아웃 흔들림 방지)
+                SizedBox(
+                  width: 84, height: 84,
+                  child: Center(
+                    child: _isVideoMode
+                        ? _VideoShutterButton(
+                            isRecording: camState.isRecording,
+                            onTap: () =>
+                                ref.read(cameraProvider.notifier).toggleRecording(),
+                          )
+                        : ShutterButton(
+                            isCapturing:
+                                camState.status == CameraStatus.capturing ||
+                                    _isCountingDown,
+                            onTap: _captureWithTimer,
+                          ),
+                  ),
+                ),
 
                 Expanded(
                   child: Row(
@@ -708,10 +744,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         active: _showBeautyPanel,
                         onTap: () {
                           HapticFeedback.selectionClick();
-                          setState(() {
-                            _showBeautyPanel = !_showBeautyPanel;
-                            if (_showBeautyPanel) _showFilterBar = false;
-                          });
+                          setState(() { _showBeautyPanel = true; _showFilterBar = false; });
                         },
                       ),
                       const SizedBox(width: 12),
@@ -861,12 +894,12 @@ class _VideoShutterButton extends StatelessWidget {
 class _SideCircleButton extends StatelessWidget {
   const _SideCircleButton({
     required this.icon,
-    required this.onTap,
-    this.size = 22,
+    this.onTap,
+    this.size = 18,
     this.active = false,
   });
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final double size;
   final bool active;
 
@@ -874,7 +907,7 @@ class _SideCircleButton extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 44, height: 44,
+      width: 36, height: 36,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: active
@@ -920,83 +953,100 @@ class _BottomIconButton extends StatelessWidget {
 // ── 비교 모드 분할 오버레이 ───────────────────────────────────────────────────
 
 class _CompareSplitOverlay extends StatelessWidget {
-  const _CompareSplitOverlay();
+  const _CompareSplitOverlay({required this.position, required this.filterName});
+  final double position;
+  final String filterName;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // 중앙 분할선
-        Center(
-          child: Container(
-            width: 1.5,
-            color: Colors.white.withValues(alpha: 0.9),
+    return LayoutBuilder(builder: (context, constraints) {
+      final x = constraints.maxWidth * position;
+      return Stack(
+        children: [
+          // 분할선
+          Positioned(
+            left: x - 0.75,
+            top: 0, bottom: 0,
+            child: Container(
+              width: 1.5,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
           ),
-        ),
-        // 중앙 핸들
-        Center(
-          child: Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+          // 핸들
+          Positioned(
+            left: x - 16,
+            top: 0, bottom: 0,
+            child: Center(
+              child: Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: const Icon(
-              Icons.compare_arrows_rounded,
-              color: Colors.black,
-              size: 18,
-            ),
-          ),
-        ),
-        // BEFORE 레이블 (왼쪽)
-        Positioned(
-          top: 14, left: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              'BEFORE',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
+                child: const Icon(
+                  Icons.compare_arrows_rounded,
+                  color: Colors.black,
+                  size: 18,
+                ),
               ),
             ),
           ),
-        ),
-        // AFTER 레이블 (오른쪽)
-        Positioned(
-          top: 14, right: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              'AFTER',
-              style: TextStyle(
-                color: AppColors.silver,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
+          // BEFORE 레이블 — 핸들 왼쪽 (right 기준으로 AFTER와 동일 간격)
+          Positioned(
+            right: constraints.maxWidth - (x - 16) + 8,
+            top: 0, bottom: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  '원본',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    );
+          // AFTER 레이블 — 핸들 오른쪽
+          Positioned(
+            left: x + 16 + 8, // 핸들 오른쪽 가장자리 + 간격
+            top: 0, bottom: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  filterName,
+                  style: const TextStyle(
+                    color: AppColors.silver,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    });
   }
 }
 

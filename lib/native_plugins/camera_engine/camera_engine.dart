@@ -70,6 +70,10 @@ class CameraEngine {
     await _channel.invokeMethod<void>('setCompareMode', {'enable': enable});
   }
 
+  static Future<void> setSplitPosition(double position) async {
+    await _channel.invokeMethod<void>('setSplitPosition', {'position': position});
+  }
+
   /// 뷰티 모드 설정 ('none'|'soft'|'glow'|'silky'|'faceBright'|'shadowLift'|'skinFocus'|'softDepth')
   static Future<void> setBeauty(String mode, double intensity) async {
     await _channel.invokeMethod<void>('setBeauty', {
