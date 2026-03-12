@@ -113,15 +113,26 @@
 
 ## Sprint 4 — Polish & QA
 
-### ⏳ 대기
+### 🔄 진행 중
 
-- [ ] 앱 아이콘 교체 (OLED Black + Silver)
+- [x] 앱 아이콘 교체 (OLED Black + Silver) ← **2026-03-13 완료**
 - [ ] 스플래시 화면 (Pure Black + "Like This" 텍스트)
 - [ ] 햅틱 피드백 최적화
 - [ ] 셔터 애니메이션 (1.0→0.92, 150ms spring)
 - [ ] `flutter test --coverage` 커버리지 70%+ 달성
 - [ ] iOS TestFlight 빌드
 - [ ] Android 내부 테스트 트랙 빌드
+
+#### [2026-03-13] 앱 아이콘 생성 ✅
+- `tools/generate_icon.py` — Pillow 4× 슈퍼샘플링으로 1024×1024 마스터 PNG 생성
+  - OLED Black (#000000) 배경
+  - Silver (#C0C0C0) 원형 테두리 (반지름 40%, 스트로크 2.1%)
+  - camera_alt_outlined 아이콘 (Silver, 40% 크기)
+- `flutter_launcher_icons: ^0.14.3` dev_dependency 추가
+  - `remove_alpha_ios: true` (App Store 제출 대응)
+  - Android adaptive icon (`adaptive_icon_background: "#000000"`)
+- iOS AppIcon.appiconset 전체 사이즈 생성 완료
+- Android mipmap-mdpi ~ mipmap-xxxhdpi + anydpi-v26 생성 완료
 
 ---
 
