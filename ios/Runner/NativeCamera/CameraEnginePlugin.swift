@@ -273,6 +273,7 @@ final class LikeThisCamera: NSObject {
                 }
 
             // ── 동영상 프레임 필터 적용 후 저장 ─────────────────────────────────────
+            // AVVideoComposition(asset:applyingCIFiltersWithHandler:) — Apple 권장 방식
             case "processAndSaveVideo":
                 guard let args = call.arguments as? [String: Any],
                       let sourcePath = args["sourcePath"] as? String,
@@ -286,190 +287,75 @@ final class LikeThisCamera: NSObject {
                 let vigIntensity   = Float((args["vignette"] as? Double) ?? 0.0)
                 let grainIntensity = Float((args["grain"]    as? Double) ?? 0.0)
                 let m              = matrixVals
-                let ciCtx          = self.bwEngine.context
 
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let srcURL = URL(fileURLWithPath: sourcePath)
-                    let outURL = URL(fileURLWithPath: outputPath)
-                    try? FileManager.default.removeItem(at: outURL)
+                let srcURL = URL(fileURLWithPath: sourcePath)
+                let outURL = URL(fileURLWithPath: outputPath)
+                try? FileManager.default.removeItem(at: outURL)
 
-                    let asset = AVURLAsset(url: srcURL)
-                    guard let videoTrack = asset.tracks(withMediaType: .video).first else {
-                        DispatchQueue.main.async {
-                            result(FlutterError(code: "NO_VIDEO_TRACK", message: "No video track", details: nil))
-                        }
-                        return
+                let asset = AVURLAsset(url: srcURL)
+                guard let exportSession = AVAssetExportSession(
+                    asset: asset, presetName: AVAssetExportPresetHighestQuality)
+                else {
+                    result(FlutterError(code: "EXPORT_FAILED", message: "Cannot create export session", details: nil))
+                    return
+                }
+
+                // 프레임별 CIFilter 적용 — GPU-backed CIContext 사용
+                let ciCtx = CIContext(options: [.useSoftwareRenderer: false])
+                let composition = AVVideoComposition(asset: asset) { request in
+                    var ci = request.sourceImage.clampedToExtent()
+
+                    // Color matrix (Flutter 4×5 행렬, bias /255)
+                    if let f = CIFilter(name: "CIColorMatrix") {
+                        f.setValue(ci, forKey: kCIInputImageKey)
+                        f.setValue(CIVector(x: m[0],  y: m[1],  z: m[2],  w: m[3]),  forKey: "inputRVector")
+                        f.setValue(CIVector(x: m[5],  y: m[6],  z: m[7],  w: m[8]),  forKey: "inputGVector")
+                        f.setValue(CIVector(x: m[10], y: m[11], z: m[12], w: m[13]), forKey: "inputBVector")
+                        f.setValue(CIVector(x: m[15], y: m[16], z: m[17], w: m[18]), forKey: "inputAVector")
+                        f.setValue(CIVector(x: m[4]/255, y: m[9]/255, z: m[14]/255, w: m[19]/255), forKey: "inputBiasVector")
+                        if let out = f.outputImage { ci = out.clampedToExtent() }
                     }
-
-                    guard let reader = try? AVAssetReader(asset: asset),
-                          let writer = try? AVAssetWriter(outputURL: outURL, fileType: .mp4)
-                    else {
-                        DispatchQueue.main.async {
-                            result(FlutterError(code: "INIT_FAILED", message: "Reader/Writer init failed", details: nil))
-                        }
-                        return
+                    // Vignette
+                    if vigIntensity > 0.01, let f = CIFilter(name: "CIVignette") {
+                        f.setValue(ci, forKey: kCIInputImageKey)
+                        f.setValue(Double(vigIntensity) * 2.5, forKey: kCIInputIntensityKey)
+                        f.setValue(1.5, forKey: kCIInputRadiusKey)
+                        if let out = f.outputImage { ci = out.clampedToExtent() }
                     }
-
-                    // Video reader: BGRA pixel buffer
-                    let videoOut = AVAssetReaderTrackOutput(
-                        track: videoTrack,
-                        outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-                    )
-                    videoOut.alwaysCopiesSampleData = false
-                    reader.add(videoOut)
-
-                    // Output size: apply preferredTransform for correct orientation
-                    let naturalSize = videoTrack.naturalSize
-                    let transform   = videoTrack.preferredTransform
-                    let transformed = naturalSize.applying(transform)
-                    let outW = Int(abs(transformed.width))
-                    let outH = Int(abs(transformed.height))
-
-                    let bitrate = max(min(videoTrack.estimatedDataRate, 10_000_000), 2_000_000)
-                    let videoWriterInput = AVAssetWriterInput(
-                        mediaType: .video,
-                        outputSettings: [
-                            AVVideoCodecKey:  AVVideoCodecType.h264,
-                            AVVideoWidthKey:  outW,
-                            AVVideoHeightKey: outH,
-                            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate],
-                        ]
-                    )
-                    videoWriterInput.expectsMediaDataInRealTime = false
-                    videoWriterInput.transform = transform
-
-                    let pbAttrs: [String: Any] = [
-                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                        kCVPixelBufferWidthKey  as String: Int(naturalSize.width),
-                        kCVPixelBufferHeightKey as String: Int(naturalSize.height),
-                    ]
-                    var pbPool: CVPixelBufferPool?
-                    CVPixelBufferPoolCreate(nil, nil, pbAttrs as CFDictionary, &pbPool)
-
-                    let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-                        assetWriterInput: videoWriterInput,
-                        sourcePixelBufferAttributes: pbAttrs
-                    )
-                    writer.add(videoWriterInput)
-
-                    // Audio passthrough
-                    var audioOut: AVAssetReaderTrackOutput? = nil
-                    var audioIn:  AVAssetWriterInput?       = nil
-                    if let audioTrack = asset.tracks(withMediaType: .audio).first {
-                        let aOut = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
-                        aOut.alwaysCopiesSampleData = false
-                        reader.add(aOut)
-                        audioOut = aOut
-                        let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
-                        aIn.expectsMediaDataInRealTime = false
-                        writer.add(aIn)
-                        audioIn = aIn
-                    }
-
-                    guard reader.startReading() else {
-                        DispatchQueue.main.async {
-                            result(FlutterError(code: "READ_FAILED", message: reader.error?.localizedDescription, details: nil))
-                        }
-                        return
-                    }
-                    writer.startWriting()
-                    writer.startSession(atSourceTime: .zero)
-
-                    let group = DispatchGroup()
-                    let procQ = DispatchQueue(label: "com.likethis.videoProc")
-
-                    // ── Video frames ──────────────────────────────────────
-                    group.enter()
-                    videoWriterInput.requestMediaDataWhenReady(on: procQ) {
-                        while videoWriterInput.isReadyForMoreMediaData {
-                            guard let sample = videoOut.copyNextSampleBuffer() else {
-                                videoWriterInput.markAsFinished()
-                                group.leave()
-                                return
-                            }
-                            guard let pixelBuf = CMSampleBufferGetImageBuffer(sample) else { continue }
-                            let pts = CMSampleBufferGetPresentationTimeStamp(sample)
-                            var ci  = CIImage(cvPixelBuffer: pixelBuf)
-
-                            // Color matrix
-                            if let f = CIFilter(name: "CIColorMatrix") {
-                                f.setValue(ci, forKey: kCIInputImageKey)
-                                f.setValue(CIVector(x: m[0],  y: m[1],  z: m[2],  w: m[3]),  forKey: "inputRVector")
-                                f.setValue(CIVector(x: m[5],  y: m[6],  z: m[7],  w: m[8]),  forKey: "inputGVector")
-                                f.setValue(CIVector(x: m[10], y: m[11], z: m[12], w: m[13]), forKey: "inputBVector")
-                                f.setValue(CIVector(x: m[15], y: m[16], z: m[17], w: m[18]), forKey: "inputAVector")
-                                f.setValue(CIVector(x: m[4]/255, y: m[9]/255, z: m[14]/255, w: m[19]/255), forKey: "inputBiasVector")
-                                if let out = f.outputImage { ci = out }
-                            }
-                            // Vignette
-                            if vigIntensity > 0.01, let f = CIFilter(name: "CIVignette") {
-                                f.setValue(ci, forKey: kCIInputImageKey)
-                                f.setValue(Double(vigIntensity) * 2.5, forKey: kCIInputIntensityKey)
-                                f.setValue(1.5, forKey: kCIInputRadiusKey)
-                                if let out = f.outputImage { ci = out }
-                            }
-                            // Grain
-                            if grainIntensity > 0.01,
-                               let noise = CIFilter(name: "CIRandomGenerator")?.outputImage,
-                               let mono = CIFilter(name: "CIColorMatrix") {
-                                let croppedNoise = noise.cropped(to: ci.extent)
-                                let n = CGFloat(grainIntensity) * 0.18
-                                mono.setValue(croppedNoise, forKey: kCIInputImageKey)
-                                mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                                mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputGVector")
-                                mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputBVector")
-                                mono.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputAVector")
-                                if let grainImg = mono.outputImage,
-                                   let blend = CIFilter(name: "CISoftLightBlendMode") {
-                                    blend.setValue(grainImg, forKey: kCIInputImageKey)
-                                    blend.setValue(ci, forKey: kCIInputBackgroundImageKey)
-                                    if let out = blend.outputImage { ci = out }
-                                }
-                            }
-                            // Render to pixel buffer
-                            var outBuf: CVPixelBuffer?
-                            if let pool = pbPool {
-                                CVPixelBufferPoolCreatePixelBuffer(nil, pool, &outBuf)
-                            } else {
-                                CVPixelBufferCreate(nil, Int(naturalSize.width), Int(naturalSize.height),
-                                                    kCVPixelFormatType_32BGRA, pbAttrs as CFDictionary, &outBuf)
-                            }
-                            if let buf = outBuf {
-                                ciCtx.render(ci, to: buf)
-                                adaptor.append(buf, withPresentationTime: pts)
-                            }
+                    // Grain
+                    if grainIntensity > 0.01,
+                       let noise = CIFilter(name: "CIRandomGenerator")?.outputImage,
+                       let mono = CIFilter(name: "CIColorMatrix") {
+                        let croppedNoise = noise.cropped(to: request.sourceImage.extent)
+                        let n = CGFloat(grainIntensity) * 0.18
+                        mono.setValue(croppedNoise, forKey: kCIInputImageKey)
+                        mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputRVector")
+                        mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputGVector")
+                        mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputBVector")
+                        mono.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputAVector")
+                        if let grainImg = mono.outputImage,
+                           let blend = CIFilter(name: "CISoftLightBlendMode") {
+                            blend.setValue(grainImg, forKey: kCIInputImageKey)
+                            blend.setValue(ci,       forKey: kCIInputBackgroundImageKey)
+                            if let out = blend.outputImage { ci = out.clampedToExtent() }
                         }
                     }
+                    request.finish(with: ci, context: ciCtx)
+                }
 
-                    // ── Audio passthrough ─────────────────────────────────
-                    if let aOut = audioOut, let aIn = audioIn {
-                        group.enter()
-                        aIn.requestMediaDataWhenReady(on: procQ) {
-                            while aIn.isReadyForMoreMediaData {
-                                guard let sample = aOut.copyNextSampleBuffer() else {
-                                    aIn.markAsFinished()
-                                    group.leave()
-                                    return
-                                }
-                                aIn.append(sample)
-                            }
-                        }
-                    }
-
-                    // ── Finish ─────────────────────────────────────────────
-                    group.notify(queue: procQ) {
-                        writer.finishWriting {
-                            DispatchQueue.main.async {
-                                if writer.status == .completed {
-                                    result(outputPath)
-                                } else {
-                                    result(FlutterError(
-                                        code: "EXPORT_FAILED",
-                                        message: writer.error?.localizedDescription,
-                                        details: nil
-                                    ))
-                                }
-                            }
+                exportSession.outputURL        = outURL
+                exportSession.outputFileType   = .mp4
+                exportSession.videoComposition = composition
+                exportSession.exportAsynchronously {
+                    DispatchQueue.main.async {
+                        if exportSession.status == .completed {
+                            result(outputPath)
+                        } else {
+                            result(FlutterError(
+                                code: "EXPORT_FAILED",
+                                message: exportSession.error?.localizedDescription ?? "Export failed",
+                                details: nil
+                            ))
                         }
                     }
                 }

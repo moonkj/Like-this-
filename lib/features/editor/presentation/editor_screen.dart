@@ -300,11 +300,12 @@ class _EditorScreenState extends State<EditorScreen> {
       await PhotoManager.editor.saveImageWithPath(resultPath, title: name);
       HapticFeedback.lightImpact();
       if (mounted) context.pop();
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('저장에 실패했습니다.'),
-              behavior: SnackBarBehavior.floating),
+          SnackBar(content: Text('저장 실패: $e'),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 6)),
         );
       }
     } finally {
