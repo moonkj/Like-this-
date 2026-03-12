@@ -267,12 +267,29 @@ final class MFBWEngine {
 
     private func applyEffects(_ image: CIImage, scale: Float = 1.0) -> CIImage {
         var out = image
-        if _vignette * scale > 0.01 { out = applyVignette(out, intensity: _vignette * scale) }
-        if _grain * scale > 0.01    { out = applyGrain(out, intensity: _grain * scale) }
-        if _bloom * scale > 0.01    { out = applyBloom(out, intensity: _bloom * scale) }
-        if _dust  * scale > 0.01    { out = applyDust(out, intensity: _dust * scale) }
+        if _vignette   * scale > 0.01 { out = applyVignette(out, intensity: _vignette * scale) }
+        if _grain      * scale > 0.01 { out = applyGrain(out, intensity: _grain * scale) }
+        if _lightLeak  * scale > 0.01 { out = applyLightLeak(out, intensity: _lightLeak * scale) }
+        if _bloom      * scale > 0.01 { out = applyBloom(out, intensity: _bloom * scale) }
+        if _dust       * scale > 0.01 { out = applyDust(out, intensity: _dust * scale) }
         if activeFilterId == "bw_paper" { out = applyPaperTone(out) }
         return out
+    }
+
+    private func applyLightLeak(_ image: CIImage, intensity: Float) -> CIImage {
+        let ext = image.extent
+        guard let radial = CIFilter(name: "CIRadialGradient") else { return image }
+        radial.setValue(CIVector(x: ext.minX, y: ext.maxY), forKey: "inputCenter")
+        radial.setValue(ext.width * 0.5, forKey: "inputRadius0")
+        radial.setValue(ext.width * 1.2, forKey: "inputRadius1")
+        radial.setValue(CIColor(red: 1.0, green: 0.6, blue: 0.2,
+                                alpha: CGFloat(intensity) * 0.65), forKey: "inputColor0")
+        radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor1")
+        guard let leakImg = radial.outputImage?.cropped(to: ext),
+              let blend = CIFilter(name: "CIScreenBlendMode") else { return image }
+        blend.setValue(leakImg, forKey: kCIInputImageKey)
+        blend.setValue(image,   forKey: kCIInputBackgroundImageKey)
+        return blend.outputImage?.cropped(to: ext) ?? image
     }
 
     private func applyVignette(_ image: CIImage, intensity: Float) -> CIImage {

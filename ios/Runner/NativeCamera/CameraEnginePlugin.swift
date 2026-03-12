@@ -171,8 +171,10 @@ final class LikeThisCamera: NSObject {
                     result(FlutterError(code: "INVALID_ARGS", message: "Arguments missing", details: nil))
                     return
                 }
-                let vigIntensity   = Float((args["vignette"] as? Double) ?? 0.0)
-                let grainIntensity = Float((args["grain"]    as? Double) ?? 0.0)
+                let vigIntensity       = Float((args["vignette"]   as? Double) ?? 0.0)
+                let grainIntensity     = Float((args["grain"]      as? Double) ?? 0.0)
+                let lightLeakIntensity = Float((args["lightLeak"]  as? Double) ?? 0.0)
+                let bloomIntensity     = Float((args["bloom"]      as? Double) ?? 0.0)
                 let cropX = CGFloat((args["cropX"] as? Double) ?? 0.0)
                 let cropY = CGFloat((args["cropY"] as? Double) ?? 0.0)
                 let cropW = CGFloat((args["cropW"] as? Double) ?? 1.0)
@@ -236,7 +238,36 @@ final class LikeThisCamera: NSObject {
                         }
                     }
 
-                    // 5. 크롭 (Flutter top-left Y → CIImage bottom-left Y 변환)
+                    // 5. 빛번짐
+                    if lightLeakIntensity > 0.01 {
+                        let ext = processed.extent
+                        if let radial = CIFilter(name: "CIRadialGradient") {
+                            radial.setValue(CIVector(x: ext.minX, y: ext.maxY), forKey: "inputCenter")
+                            radial.setValue(ext.width * 0.5, forKey: "inputRadius0")
+                            radial.setValue(ext.width * 1.2, forKey: "inputRadius1")
+                            radial.setValue(CIColor(red: 1.0, green: 0.6, blue: 0.2,
+                                                    alpha: CGFloat(lightLeakIntensity) * 0.65), forKey: "inputColor0")
+                            radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor1")
+                            if let leakImg = radial.outputImage?.cropped(to: ext),
+                               let blend = CIFilter(name: "CIScreenBlendMode") {
+                                blend.setValue(leakImg, forKey: kCIInputImageKey)
+                                blend.setValue(processed, forKey: kCIInputBackgroundImageKey)
+                                if let out = blend.outputImage { processed = out }
+                            }
+                        }
+                    }
+
+                    // 6. 글로우
+                    if bloomIntensity > 0.01 {
+                        if let f = CIFilter(name: "CIBloom") {
+                            f.setValue(processed, forKey: kCIInputImageKey)
+                            f.setValue(22.0, forKey: kCIInputRadiusKey)
+                            f.setValue(Double(bloomIntensity) * 2.0, forKey: kCIInputIntensityKey)
+                            if let out = f.outputImage { processed = out }
+                        }
+                    }
+
+                    // 7. 크롭 (Flutter top-left Y → CIImage bottom-left Y 변환)
                     if hasCrop {
                         let ext = processed.extent
                         let ci_x = ext.origin.x + cropX * ext.width
@@ -247,7 +278,7 @@ final class LikeThisCamera: NSObject {
                         ))
                     }
 
-                    // 6. JPEG 렌더링 & 저장
+                    // 8. JPEG 렌더링 & 저장
                     guard let cgOut = self.bwEngine.context.createCGImage(processed, from: processed.extent) else {
                         DispatchQueue.main.async {
                             result(FlutterError(code: "RENDER_FAILED", message: "createCGImage failed", details: nil))
@@ -284,9 +315,11 @@ final class LikeThisCamera: NSObject {
                     result(FlutterError(code: "INVALID_ARGS", message: "Arguments missing", details: nil))
                     return
                 }
-                let vigIntensity   = Float((args["vignette"] as? Double) ?? 0.0)
-                let grainIntensity = Float((args["grain"]    as? Double) ?? 0.0)
-                let m              = matrixVals
+                let vigIntensity       = Float((args["vignette"]  as? Double) ?? 0.0)
+                let grainIntensity     = Float((args["grain"]     as? Double) ?? 0.0)
+                let lightLeakIntensity = Float((args["lightLeak"] as? Double) ?? 0.0)
+                let bloomIntensity     = Float((args["bloom"]     as? Double) ?? 0.0)
+                let m                  = matrixVals
 
                 let srcURL = URL(fileURLWithPath: sourcePath)
                 let outURL = URL(fileURLWithPath: outputPath)
@@ -303,7 +336,9 @@ final class LikeThisCamera: NSObject {
                 // 프레임별 CIFilter 적용 — GPU-backed CIContext 사용
                 let ciCtx = CIContext(options: [.useSoftwareRenderer: false])
                 let composition = AVVideoComposition(asset: asset) { request in
-                    var ci = request.sourceImage.clampedToExtent()
+                    // extent를 고정 기준으로 사용 — clampedToExtent() 대신 cropped(to:)로 항상 동일 범위 유지
+                    let extent = request.sourceImage.extent
+                    var ci = request.sourceImage
 
                     // Color matrix (Flutter 4×5 행렬, bias /255)
                     if let f = CIFilter(name: "CIColorMatrix") {
@@ -313,32 +348,55 @@ final class LikeThisCamera: NSObject {
                         f.setValue(CIVector(x: m[10], y: m[11], z: m[12], w: m[13]), forKey: "inputBVector")
                         f.setValue(CIVector(x: m[15], y: m[16], z: m[17], w: m[18]), forKey: "inputAVector")
                         f.setValue(CIVector(x: m[4]/255, y: m[9]/255, z: m[14]/255, w: m[19]/255), forKey: "inputBiasVector")
-                        if let out = f.outputImage { ci = out.clampedToExtent() }
+                        if let out = f.outputImage { ci = out.cropped(to: extent) }
                     }
                     // Vignette
                     if vigIntensity > 0.01, let f = CIFilter(name: "CIVignette") {
                         f.setValue(ci, forKey: kCIInputImageKey)
                         f.setValue(Double(vigIntensity) * 2.5, forKey: kCIInputIntensityKey)
                         f.setValue(1.5, forKey: kCIInputRadiusKey)
-                        if let out = f.outputImage { ci = out.clampedToExtent() }
+                        if let out = f.outputImage { ci = out.cropped(to: extent) }
                     }
                     // Grain
                     if grainIntensity > 0.01,
                        let noise = CIFilter(name: "CIRandomGenerator")?.outputImage,
                        let mono = CIFilter(name: "CIColorMatrix") {
-                        let croppedNoise = noise.cropped(to: request.sourceImage.extent)
+                        let croppedNoise = noise.cropped(to: extent)
                         let n = CGFloat(grainIntensity) * 0.18
                         mono.setValue(croppedNoise, forKey: kCIInputImageKey)
                         mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputRVector")
                         mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputGVector")
                         mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputBVector")
                         mono.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputAVector")
-                        if let grainImg = mono.outputImage,
+                        if let grainImg = mono.outputImage?.cropped(to: extent),
                            let blend = CIFilter(name: "CISoftLightBlendMode") {
                             blend.setValue(grainImg, forKey: kCIInputImageKey)
                             blend.setValue(ci,       forKey: kCIInputBackgroundImageKey)
-                            if let out = blend.outputImage { ci = out.clampedToExtent() }
+                            if let out = blend.outputImage { ci = out.cropped(to: extent) }
                         }
+                    }
+                    // LightLeak
+                    if lightLeakIntensity > 0.01,
+                       let radial = CIFilter(name: "CIRadialGradient") {
+                        radial.setValue(CIVector(x: extent.minX, y: extent.maxY), forKey: "inputCenter")
+                        radial.setValue(extent.width * 0.5, forKey: "inputRadius0")
+                        radial.setValue(extent.width * 1.2, forKey: "inputRadius1")
+                        radial.setValue(CIColor(red: 1.0, green: 0.6, blue: 0.2,
+                                                alpha: CGFloat(lightLeakIntensity) * 0.65), forKey: "inputColor0")
+                        radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor1")
+                        if let leakImg = radial.outputImage?.cropped(to: extent),
+                           let blend = CIFilter(name: "CIScreenBlendMode") {
+                            blend.setValue(leakImg, forKey: kCIInputImageKey)
+                            blend.setValue(ci,      forKey: kCIInputBackgroundImageKey)
+                            if let out = blend.outputImage { ci = out.cropped(to: extent) }
+                        }
+                    }
+                    // Bloom
+                    if bloomIntensity > 0.01, let f = CIFilter(name: "CIBloom") {
+                        f.setValue(ci, forKey: kCIInputImageKey)
+                        f.setValue(22.0, forKey: kCIInputRadiusKey)
+                        f.setValue(Double(bloomIntensity) * 2.0, forKey: kCIInputIntensityKey)
+                        if let out = f.outputImage { ci = out.cropped(to: extent) }
                     }
                     request.finish(with: ci, context: ciCtx)
                 }

@@ -242,8 +242,10 @@ class _EditorScreenState extends State<EditorScreen> {
         final resultPath = await CameraEngine.processAndSaveVideo(
           sourcePath:  _currentPath,
           colorMatrix: _buildFilterMatrix(),
-          vignette:    _vignette / 100.0,
-          grain:       _grain    / 100.0,
+          vignette:    _vignette   / 100.0,
+          grain:       _grain      / 100.0,
+          lightLeak:   _lightLeak  / 100.0,
+          bloom:       _bloom      / 100.0,
           outputPath:  outputPath,
         );
         if (resultPath == null) throw Exception('영상 처리 실패');
@@ -287,8 +289,10 @@ class _EditorScreenState extends State<EditorScreen> {
       final resultPath = await CameraEngine.processAndSaveImage(
         sourcePath:  sourcePath,
         colorMatrix: _buildFilterMatrix(),
-        vignette:    _vignette / 100.0,
-        grain:       _grain    / 100.0,
+        vignette:    _vignette   / 100.0,
+        grain:       _grain      / 100.0,
+        lightLeak:   _lightLeak  / 100.0,
+        bloom:       _bloom      / 100.0,
         outputPath:  outputPath,
         cropX: _cropChanged ? _cropRect.left   : 0.0,
         cropY: _cropChanged ? _cropRect.top    : 0.0,
@@ -498,8 +502,8 @@ class _EditorScreenState extends State<EditorScreen> {
       return Expanded(child: photoWidget);
     }
 
-    // 스와이프 탐색: 크롭 탭·비교 모드에서는 비활성
-    final canSwipe = _tab != 2 && !_isComparing;
+    // 스와이프 탐색: 필터 탭에서만 활성 (효과 탭은 슬라이더 제스처 충돌 방지, 크롭·비교 모드도 비활성)
+    final canSwipe = _tab == 0 && !_isComparing;
 
     return Expanded(
       child: PageView.builder(
@@ -602,15 +606,25 @@ class _EditorScreenState extends State<EditorScreen> {
                 Center(
                   child: AspectRatio(
                     aspectRatio: ctrl.value.aspectRatio,
-                    child: ColorFiltered(
-                      colorFilter: _buildFilter(),
-                      child: VideoPlayer(ctrl),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ColorFiltered(
+                          colorFilter: _buildFilter(),
+                          child: VideoPlayer(ctrl),
+                        ),
+                        if (_vignette > 0)
+                          IgnorePointer(child: _VignetteOverlay(intensity: _vignette / 100)),
+                        if (_grain > 0)
+                          IgnorePointer(child: CustomPaint(painter: _GrainPainter(intensity: _grain / 100))),
+                        if (_lightLeak > 0)
+                          IgnorePointer(child: _LightLeakOverlay(intensity: _lightLeak / 100)),
+                        if (_bloom > 0)
+                          IgnorePointer(child: _BloomOverlay(intensity: _bloom / 100)),
+                      ],
                     ),
                   ),
                 ),
-                if (_vignette > 0)
-                  Positioned.fill(child: IgnorePointer(
-                      child: _VignetteOverlay(intensity: _vignette / 100))),
                 // 크롭 탭이 아닐 때만 일시정지 아이콘 표시
                 if (_tab != 2 && !ctrl.value.isPlaying)
                   Center(
@@ -687,6 +701,12 @@ class _EditorScreenState extends State<EditorScreen> {
           if (_grain > 0)
             Positioned.fill(child: IgnorePointer(
                 child: CustomPaint(painter: _GrainPainter(intensity: _grain / 100)))),
+          if (_lightLeak > 0)
+            Positioned.fill(child: IgnorePointer(
+                child: _LightLeakOverlay(intensity: _lightLeak / 100))),
+          if (_bloom > 0)
+            Positioned.fill(child: IgnorePointer(
+                child: _BloomOverlay(intensity: _bloom / 100))),
         ]),
       );
     }
@@ -703,7 +723,7 @@ class _EditorScreenState extends State<EditorScreen> {
               gaplessPlayback: true),
         ),
         // 효과 오버레이는 실제 이미지 영역에만 (letterbox 제외)
-        if ((_vignette > 0 || _grain > 0) && _imageSize != null)
+        if ((_vignette > 0 || _grain > 0 || _lightLeak > 0 || _bloom > 0) && _imageSize != null)
           Center(
             child: AspectRatio(
               aspectRatio: _imageSize!.width / _imageSize!.height,
@@ -715,6 +735,10 @@ class _EditorScreenState extends State<EditorScreen> {
                   if (_grain > 0)
                     IgnorePointer(child: CustomPaint(
                         painter: _GrainPainter(intensity: _grain / 100))),
+                  if (_lightLeak > 0)
+                    IgnorePointer(child: _LightLeakOverlay(intensity: _lightLeak / 100)),
+                  if (_bloom > 0)
+                    IgnorePointer(child: _BloomOverlay(intensity: _bloom / 100)),
                 ],
               ),
             ),
@@ -867,6 +891,7 @@ class _EditorScreenState extends State<EditorScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 24, left: 20, right: 20),
             child: _EditorSlider(
+              key: ValueKey(_selectedEffect),
               value: sel.value, min: sel.min, max: sel.max,
               onChanged: sel.onChanged,
             ),
@@ -1239,6 +1264,7 @@ class _FilterItem extends StatelessWidget {
 
 class _EditorSlider extends StatelessWidget {
   const _EditorSlider({
+    super.key,
     required this.value,
     required this.min,
     required this.max,
@@ -1328,6 +1354,47 @@ class _GrainPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GrainPainter old) => old.intensity != intensity;
+}
+
+// ── 빛번짐 오버레이 ───────────────────────────────────────────────────────────
+
+class _LightLeakOverlay extends StatelessWidget {
+  const _LightLeakOverlay({required this.intensity});
+  final double intensity;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      gradient: RadialGradient(
+        center: const Alignment(-0.8, -0.8),
+        radius: 1.5,
+        colors: [
+          Colors.orange.withValues(alpha: intensity * 0.5),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ),
+    ),
+  );
+}
+
+// ── 글로우 오버레이 ───────────────────────────────────────────────────────────
+
+class _BloomOverlay extends StatelessWidget {
+  const _BloomOverlay({required this.intensity});
+  final double intensity;
+
+  @override
+  Widget build(BuildContext context) => BackdropFilter(
+    filter: ui.ImageFilter.blur(
+      sigmaX: intensity * 10.0,
+      sigmaY: intensity * 10.0,
+    ),
+    blendMode: BlendMode.screen,
+    child: Container(
+      color: Colors.white.withValues(alpha: intensity * 0.18),
+    ),
+  );
 }
 
 // ── 크롭 오버레이 ─────────────────────────────────────────────────────────────

@@ -582,6 +582,50 @@
 
 ---
 
+## Sprint 18 — 에디터 동영상 효과 & 프리뷰 버그 수정 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 18-1: 동영상 효과 저장 파이프라인 완성
+
+- **문제**: `processAndSaveVideo` / `processAndSaveImage` 호출 시 lightLeak·bloom 파라미터 누락 → 저장 파일에 두 효과 미반영
+- [x] `camera_engine.dart` — `processAndSaveImage` / `processAndSaveVideo` 에 `lightLeak`, `bloom` required 파라미터 추가
+- [x] `editor_screen.dart` `_save()` — 두 호출에 `lightLeak: _lightLeak / 100.0`, `bloom: _bloom / 100.0` 전달
+- [x] `CameraEnginePlugin.swift` `processAndSaveImage` — step 5(lightLeak: CIRadialGradient + CIScreenBlendMode), step 6(bloom: CIBloom) 추가
+- [x] `CameraEnginePlugin.swift` `processAndSaveVideo` — `clampedToExtent()` → `cropped(to: extent)` 전면 교체 (무한 extent로 Metal 렌더러 오작동 방지), lightLeak·bloom 필터 추가
+
+#### Sprint 18-2: 동영상 프리뷰 letterbox 효과 침범 수정
+
+- **문제**: 16:9 비디오에서 grain·lightLeak·bloom 오버레이가 AspectRatio 밖 검정 여백까지 덮음
+- [x] `editor_screen.dart` `_buildPhotoContent()` — 오버레이를 `Center > AspectRatio > Stack` 내부로 이동, `ColorFiltered(child: VideoPlayer)` 와 함께 한 Stack으로 묶음
+- [x] 이미지 프리뷰도 동일하게 `Center > AspectRatio(_imageSize)` 구조로 오버레이 제한
+
+#### Sprint 18-3: MFBWEngine lightLeak 실시간 적용 누락 수정
+
+- **문제**: `_lightLeak` 값이 `MFBWEngine`에 저장되나 `applyEffects()` 파이프라인에서 호출 안 됨
+- [x] `MFBWEngine.swift` `applyLightLeak()` private 함수 구현 (CIRadialGradient + CIScreenBlendMode)
+- [x] `applyEffects()` — `_lightLeak > 0.01` 조건으로 `applyLightLeak()` 호출 추가
+
+#### Sprint 18-4: 글로우(Bloom) 프리뷰 가시성 개선
+
+- **문제**: `_BloomOverlay` RadialGradient 방식이 너무 약해 프리뷰에서 효과가 안 보임 (저장 파일의 CIBloom과 시각 차이 큼)
+- [x] `_BloomOverlay` — RadialGradient → `BackdropFilter(ImageFilter.blur, sigmaX/Y: intensity × 10)` + BlendMode.screen + 흰색 오버레이로 교체
+- [x] 프리뷰가 네이티브 CIBloom과 유사한 블러+글로우 효과로 표시됨
+
+#### Sprint 18-5: 효과 탭 슬라이더 전환 후 터치 불가 버그 수정
+
+- **문제**: 효과 아이콘 탭으로 다른 효과 선택 시 새 슬라이더가 터치에 응답 안 함
+- **원인**: `_EditorSlider`(StatelessWidget)에 key 없음 → Flutter가 이전 `Slider` 위젯 재사용, 이전 드래그 제스처 상태 잔류
+- [x] `_EditorSlider` 생성자에 `super.key` 추가
+- [x] 효과 탭 `_EditorSlider` 호출부에 `key: ValueKey(_selectedEffect)` 전달 → 효과 전환 시 슬라이더 위젯 새로 생성
+
+#### Sprint 18-6: 효과 탭 PageView 스와이프 충돌 수정
+
+- [x] `canSwipe` 조건 `_tab != 2 && !_isComparing` → `_tab == 0 && !_isComparing` 변경
+- [x] 효과 탭(tab=1)에서 PageView 스와이프 완전 비활성 → 슬라이더 수평 드래그 100% 슬라이더로 전달
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용
