@@ -36,6 +36,7 @@ class CameraState {
     this.beautyMode = 'none',
     this.beautyIntensity = 0.0,
     this.errorMessage,
+    this.lastCapturedPath,
   });
 
   final CameraStatus status;
@@ -81,6 +82,9 @@ class CameraState {
 
   final String? errorMessage;
 
+  /// 마지막 촬영 이미지 경로 (갤러리 썸네일용)
+  final String? lastCapturedPath;
+
   bool get isReady => status == CameraStatus.ready;
   bool get isRecording => status == CameraStatus.recording;
   bool get isFront => lens == CameraLens.front;
@@ -103,6 +107,7 @@ class CameraState {
     String? beautyMode,
     double? beautyIntensity,
     String? errorMessage,
+    String? lastCapturedPath,
   }) => CameraState(
     status: status ?? this.status,
     lens: lens ?? this.lens,
@@ -121,5 +126,6 @@ class CameraState {
     beautyMode: beautyMode ?? this.beautyMode,
     beautyIntensity: beautyIntensity ?? this.beautyIntensity,
     errorMessage: errorMessage ?? this.errorMessage,
+    lastCapturedPath: lastCapturedPath ?? this.lastCapturedPath,
   );
 }

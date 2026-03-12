@@ -474,6 +474,55 @@
 
 ---
 
+## Sprint 15 — 갤러리 일괄 필터 / 에디터 스와이프 / 동영상 크롭 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 15-1: 갤러리 일괄 필터 기능
+- [x] 다중 선택 모드 상단 바 버튼: 공유 → 필터(Icons.auto_fix_high_rounded) → 삭제 순서
+- [x] `_showFilterPanel()` — `showModalBottomSheet` 직사각형 필터 썸네일(52×70/58×78, radius 8) + 강도 슬라이더
+- [x] `_applyFilterToSelected()` — `ImmutableBuffer` + `ImageDescriptor` 기반 배치 처리
+  - `ColorFilter.matrix` B&W 렌더링 + 비네팅 적용
+  - 비디오 자동 스킵 + 스낵바 알림
+  - 처리 중 상단 진행 카운트 + `LinearProgressIndicator`
+  - 완료 후 다중 선택 모드 자동 종료
+- [x] `_FilterPickerSheet` 위젯 — 에디터와 동일한 `_filterTone()` / `_buildColorFilter()` 파이프라인
+
+#### Sprint 15-2: 에디터 사진 스와이프 탐색
+- [x] `EditorScreen` — `assetList: List<AssetEntity>?` + `initialIndex: int?` 파라미터 추가
+- [x] `PageView.builder` — 갤러리 전체 에셋 스와이프 탐색
+- [x] 크롭 탭·비교 모드에서 PageView 스와이프 비활성 (`NeverScrollableScrollPhysics`)
+- [x] 페이지 변경 시 이전 비디오 컨트롤러 dispose + 새 에셋 초기화
+- [x] `_NoThumbScrollBehavior` — PageView 오버스크롤 인디케이터 제거
+- [x] GoRouter `/editor` 라우트 — `assetList` + `index` 파싱 추가
+
+#### Sprint 15-3: 갤러리 동영상 재생 수정
+- [x] `video_player_screen.dart` 신규 생성 — 독립형 전체화면 재생, 슬라이더, 공유, 삭제
+- [x] GoRouter `/video` 라우트 추가
+- [x] `gallery_screen.dart` — 동영상 탭 시 `/video` 라우트로 이동 (기존 검은 화면 수정)
+
+#### Sprint 15-4: 에디터 동영상 지원
+- [x] `EditorScreen` — `AssetType.video` 감지 → `VideoPlayerController` 초기화
+- [x] `ColorFiltered` + `VideoPlayer` — 실시간 필터 미리보기
+- [x] `bool get _isVideo` — 비디오 전용 분기 처리
+- [x] 비교 버튼 비디오 시 비활성
+- [x] 저장 버튼 비디오 시 비활성 (크롭 전까지)
+
+#### Sprint 15-5: 동영상 크롭 기능
+- [x] `CameraEngine.cropVideo()` Dart 브릿지 추가 (정규화 좌표 0~1)
+- [x] iOS `CameraEnginePlugin.swift` `cropVideo` 케이스:
+  - `AVURLAsset` + `AVAssetExportSession(presetName: .highestQuality)`
+  - `preferredTransform` 보정 → 실제 표시 크기(displayW/H) 계산
+  - `AVMutableVideoComposition` + 크롭 translate 변환
+  - `.mp4` 내보내기, 기존 파일 삭제 후 덮어쓰기
+- [x] Android `CameraEnginePlugin.kt` `cropVideo` — `NOT_IMPLEMENTED` 에러 반환 (iOS 전용)
+- [x] `editor_screen.dart` 크롭 탭에서 비디오 위에 `_CropOverlay` 표시
+- [x] 비율 프리셋 `_applyRatio()` — 비디오 크기 `_videoCtrl?.value.size` 지원
+- [x] 저장 버튼 — 비디오 + `_cropChanged` 시 활성, `CameraEngine.cropVideo()` → `PhotoManager.editor.saveVideo()` 저장
+- [x] 크롭 탭 진입 시 재생/일시정지 탭 제스처 비활성
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용

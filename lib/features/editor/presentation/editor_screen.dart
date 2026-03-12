@@ -8,18 +8,26 @@ import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_player/video_player.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/filter_model.dart';
+import '../../../native_plugins/camera_engine/camera_engine.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({
     super.key,
     required this.imagePath,
     this.assetId,
+    this.assetList,
+    this.initialIndex,
   });
 
   final String imagePath;
   final String? assetId;
+  /// 갤러리에서 전달된 전체 에셋 목록 (스와이프 탐색용)
+  final List<AssetEntity>? assetList;
+  /// assetList 내 현재 사진 인덱스
+  final int? initialIndex;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -55,18 +63,67 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isComparing   = false;
   bool _isSaving      = false;
 
+  // 스와이프 탐색
+  late String _currentPath;
+  String? _currentAssetId;
+  late PageController _pageCtrl;
+  late int _currentIndex;
+  AssetType _currentAssetType = AssetType.image;
+
+  // 비디오 재생 (비디오 에셋 전환 시 사용)
+  VideoPlayerController? _videoCtrl;
+
   final GlobalKey     _previewKey  = GlobalKey();
   final GlobalKey     _shareKey    = GlobalKey();
+
+  bool get _isVideo => _currentAssetType == AssetType.video;
 
   @override
   void initState() {
     super.initState();
-    _loadImage();
+    _currentPath    = widget.imagePath;
+    _currentAssetId = widget.assetId;
+    _currentIndex   = widget.initialIndex ?? 0;
+    _pageCtrl = PageController(initialPage: _currentIndex);
+    // 초기 에셋 타입 결정
+    final list = widget.assetList;
+    if (list != null && _currentIndex < list.length) {
+      _currentAssetType = list[_currentIndex].type;
+    }
+    _initCurrentAsset();
   }
 
-  Future<void> _loadImage() async {
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    _videoCtrl?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initCurrentAsset() async {
+    if (_isVideo) {
+      await _initVideo(_currentPath);
+    } else {
+      await _loadImage(_currentPath);
+    }
+  }
+
+  Future<void> _initVideo(String path) async {
+    await _videoCtrl?.dispose();
+    final ctrl = VideoPlayerController.file(File(path));
+    await ctrl.initialize();
+    ctrl.setLooping(true);
+    if (mounted) {
+      setState(() => _videoCtrl = ctrl);
+      ctrl.play();
+    } else {
+      ctrl.dispose();
+    }
+  }
+
+  Future<void> _loadImage([String? path]) async {
     try {
-      final bytes = await File(widget.imagePath).readAsBytes();
+      final bytes = await File(path ?? _currentPath).readAsBytes();
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       if (mounted) {
@@ -155,8 +212,9 @@ class _EditorScreenState extends State<EditorScreen> {
   /// 비율 프리셋 적용
   void _applyRatio(double? ratio) {
     if (ratio == null) return;
-    if (_imageSize == null) return;
-    final imgAspect = _imageSize!.width / _imageSize!.height;
+    final sz = _imageSize ?? (_isVideo ? _videoCtrl?.value.size : null);
+    if (sz == null) return;
+    final imgAspect = sz.width / sz.height;
     double nW, nH;
     if (ratio > imgAspect) { nW = 1.0; nH = imgAspect / ratio; }
     else                   { nH = 1.0; nW = ratio / imgAspect; }
@@ -172,6 +230,26 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_isSaving) return;
     setState(() => _isSaving = true);
     try {
+      // ── 동영상 크롭 저장 ────────────────────────────────────────────────
+      if (_isVideo && _cropChanged) {
+        final dir  = await getTemporaryDirectory();
+        final name = 'likethis_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        final outputPath = '${dir.path}/$name';
+        final croppedPath = await CameraEngine.cropVideo(
+          inputPath:  _currentPath,
+          outputPath: outputPath,
+          x:      _cropRect.left,
+          y:      _cropRect.top,
+          width:  _cropRect.width,
+          height: _cropRect.height,
+        );
+        if (croppedPath == null) throw Exception('Video crop failed');
+        await PhotoManager.editor.saveVideo(File(croppedPath), title: name);
+        HapticFeedback.lightImpact();
+        if (mounted) context.pop();
+        return;
+      }
+
       final dir  = await getTemporaryDirectory();
       final name = 'likethis_edit_${DateTime.now().millisecondsSinceEpoch}.png';
       final file = File('${dir.path}/$name');
@@ -254,7 +332,7 @@ class _EditorScreenState extends State<EditorScreen> {
       // 렌더링 실패 시 원본 공유 fallback
       final box = _shareKey.currentContext?.findRenderObject() as RenderBox?;
       await Share.shareXFiles(
-        [XFile(widget.imagePath)],
+        [XFile(_currentPath)],
         sharePositionOrigin: box != null
             ? box.localToGlobal(Offset.zero) & box.size
             : null,
@@ -263,7 +341,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _delete() async {
-    if (widget.assetId == null) return;
+    if (_currentAssetId == null) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -291,7 +369,7 @@ class _EditorScreenState extends State<EditorScreen> {
       }
       return;
     }
-    final deleted = await PhotoManager.editor.deleteWithIds([widget.assetId!]);
+    final deleted = await PhotoManager.editor.deleteWithIds([_currentAssetId!]);
     if (!mounted) return;
     if (deleted.isNotEmpty) {
       context.pop();
@@ -318,18 +396,7 @@ class _EditorScreenState extends State<EditorScreen> {
             SizedBox(height: topPad),
             _buildTopBar(),
             // 사진: Expanded로 남은 공간 채움
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: RepaintBoundary(
-                    key: _previewKey,
-                    child: _buildPhotoContent(),
-                  ),
-                ),
-              ),
-            ),
+            _buildPhotoArea(),
             // 하단 컨트롤 (고정 152dp)
             SizedBox(
               height: 152,
@@ -386,11 +453,11 @@ class _EditorScreenState extends State<EditorScreen> {
           _CircleBtn(
             icon: Icons.compare_rounded,
             active: _isComparing,
-            onTap: () { HapticFeedback.selectionClick(); setState(() => _isComparing = !_isComparing); },
+            onTap: _isVideo ? null : () { HapticFeedback.selectionClick(); setState(() => _isComparing = !_isComparing); },
           ),
           const SizedBox(width: 8),
           // 삭제
-          if (widget.assetId != null) ...[
+          if (_currentAssetId != null) ...[
             _CircleBtn(icon: Icons.delete_outline_rounded,
                 iconColor: Colors.red, onTap: _delete),
             const SizedBox(width: 8),
@@ -398,10 +465,10 @@ class _EditorScreenState extends State<EditorScreen> {
           // 공유
           _CircleBtn(key: _shareKey, icon: Icons.ios_share_rounded, onTap: _share),
           const SizedBox(width: 8),
-          // 저장
+          // 저장 (비디오는 크롭 적용 시만 활성)
           _CircleBtn(
             icon: Icons.download_rounded,
-            onTap: _isSaving ? null : _save,
+            onTap: (_isVideo && !_cropChanged) ? null : (_isSaving ? null : _save),
             loading: _isSaving,
           ),
         ],
@@ -409,12 +476,158 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  // ── 사진 영역 ─────────────────────────────────────────────────────────────
+  // ── 사진 영역 (스와이프 탐색 포함) ──────────────────────────────────────────
+
+  Widget _buildPhotoArea() {
+    Widget photoWidget = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: RepaintBoundary(
+          key: _previewKey,
+          child: _buildPhotoContent(),
+        ),
+      ),
+    );
+
+    final list = widget.assetList;
+    if (list == null || list.length <= 1) {
+      return Expanded(child: photoWidget);
+    }
+
+    // 스와이프 탐색: 크롭 탭·비교 모드에서는 비활성
+    final canSwipe = _tab != 2 && !_isComparing;
+
+    return Expanded(
+      child: PageView.builder(
+        controller: _pageCtrl,
+        physics: canSwipe
+            ? const PageScrollPhysics()
+            : const NeverScrollableScrollPhysics(),
+        itemCount: list.length,
+        scrollBehavior: const _NoThumbScrollBehavior(),
+        onPageChanged: (i) async {
+          final asset = list[i];
+          final file = await asset.file;
+          if (file == null || !mounted) return;
+          HapticFeedback.selectionClick();
+          // 이전 비디오 컨트롤러 정리
+          final oldCtrl = _videoCtrl;
+          setState(() {
+            _currentIndex      = i;
+            _currentPath       = file.path;
+            _currentAssetId    = asset.id;
+            _currentAssetType  = asset.type;
+            _decodedImage      = null;
+            _imageSize         = null;
+            _videoCtrl         = null;
+          });
+          oldCtrl?.dispose();
+          _resetAll();
+          if (asset.type == AssetType.video) {
+            await _initVideo(file.path);
+          } else {
+            await _loadImage(file.path);
+          }
+        },
+        itemBuilder: (ctx, i) {
+          // 현재 페이지만 실제 콘텐츠, 나머지는 placeholder
+          if (i == _currentIndex) {
+            return photoWidget;
+          }
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: const ColoredBox(color: AppColors.surface),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Widget _buildPhotoContent() {
+    // ── 비디오 ──────────────────────────────────────────────────────────────
+    if (_isVideo) {
+      final ctrl = _videoCtrl;
+      if (ctrl == null || !ctrl.value.isInitialized) {
+        return const ColoredBox(
+          color: Colors.black,
+          child: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(AppColors.silver),
+              strokeWidth: 1.5,
+            ),
+          ),
+        );
+      }
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            onTap: _tab == 2 ? null : () {
+              HapticFeedback.selectionClick();
+              if (ctrl.value.isPlaying) {
+                ctrl.pause();
+              } else {
+                ctrl.play();
+              }
+              setState(() {});
+            },
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Container(color: Colors.black),
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: ctrl.value.aspectRatio,
+                    child: ColorFiltered(
+                      colorFilter: _buildFilter(),
+                      child: VideoPlayer(ctrl),
+                    ),
+                  ),
+                ),
+                if (_vignette > 0)
+                  Positioned.fill(child: IgnorePointer(
+                      child: _VignetteOverlay(intensity: _vignette / 100))),
+                // 크롭 탭이 아닐 때만 일시정지 아이콘 표시
+                if (_tab != 2 && !ctrl.value.isPlaying)
+                  Center(
+                    child: Container(
+                      width: 56, height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.silver, width: 1.5),
+                      ),
+                      child: const Icon(Icons.play_arrow_rounded,
+                          color: Colors.white, size: 32),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // 크롭 탭: 비디오 위에 크롭 오버레이
+          if (_tab == 2)
+            LayoutBuilder(builder: (_, constraints) {
+              return _CropOverlay(
+                containerSize: constraints.biggest,
+                imageSize: ctrl.value.size,
+                cropRect: _cropRect,
+                onCropChanged: (r) => setState(() {
+                  _cropRect = r; _cropChanged = true; _cropRatioKey = '자유';
+                }),
+              );
+            }),
+        ],
+      );
+    }
+
+    // ── 비교 모드 ───────────────────────────────────────────────────────────
     if (_isComparing) {
       return _CompareOverlay(
-        imagePath: widget.imagePath,
+        imagePath: _currentPath,
         colorFilter: _buildFilter(),
         vignetteIntensity: _vignette / 100,
         grainIntensity: _grain / 100,
@@ -428,7 +641,7 @@ class _EditorScreenState extends State<EditorScreen> {
         return Stack(fit: StackFit.expand, children: [
           ColorFiltered(
             colorFilter: _buildFilter(),
-            child: Image.file(File(widget.imagePath),
+            child: Image.file(File(_currentPath),
                 fit: BoxFit.contain, gaplessPlayback: true),
           ),
           if (_imageSize != null)
@@ -475,7 +688,7 @@ class _EditorScreenState extends State<EditorScreen> {
         Container(color: AppColors.surface),
         ColorFiltered(
           colorFilter: _buildFilter(),
-          child: Image.file(File(widget.imagePath),
+          child: Image.file(File(_currentPath),
               fit: BoxFit.contain, width: double.infinity, height: double.infinity,
               gaplessPlayback: true),
         ),
@@ -1310,4 +1523,16 @@ class _SplitClipper extends CustomClipper<Rect> {
 
   @override
   bool shouldReclip(_SplitClipper old) => old.splitX != splitX;
+}
+
+// ── 스크롤 오버스크롤 효과 제거 (PageView 전용) ────────────────────────────────
+class _NoThumbScrollBehavior extends ScrollBehavior {
+  const _NoThumbScrollBehavior();
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const PageScrollPhysics();
+  @override
+  Widget buildOverscrollIndicator(
+          BuildContext context, Widget child, ScrollableDetails details) =>
+      child;
 }

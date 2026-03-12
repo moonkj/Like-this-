@@ -81,4 +81,24 @@ class CameraEngine {
       'intensity': intensity,
     });
   }
+
+  /// 동영상 크롭 — 정규화 좌표 (0~1) 기준
+  /// 반환: 크롭된 동영상 파일 경로, 실패 시 null
+  static Future<String?> cropVideo({
+    required String inputPath,
+    required String outputPath,
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+  }) async {
+    return _channel.invokeMethod<String>('cropVideo', {
+      'inputPath': inputPath,
+      'outputPath': outputPath,
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
+    });
+  }
 }

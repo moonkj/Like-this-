@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/camera/presentation/camera_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/editor/presentation/editor_screen.dart';
 import '../../features/filter_library/presentation/filter_library_screen.dart';
 import '../../features/gallery/presentation/gallery_screen.dart';
+import '../../features/gallery/presentation/video_player_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -90,16 +92,41 @@ final GoRouter appRouter = GoRouter(
         final extra = state.extra;
         final String imagePath;
         final String? assetId;
+        List<AssetEntity>? assetList;
+        int? initialIndex;
         if (extra is Map<String, dynamic>) {
-          imagePath = extra['path'] as String? ?? '';
-          assetId   = extra['assetId'] as String?;
+          imagePath    = extra['path'] as String? ?? '';
+          assetId      = extra['assetId'] as String?;
+          assetList    = extra['assetList'] as List<AssetEntity>?;
+          initialIndex = extra['index'] as int?;
         } else {
           imagePath = extra as String? ?? '';
           assetId   = null;
         }
         return CustomTransitionPage(
           key: state.pageKey,
-          child: EditorScreen(imagePath: imagePath, assetId: assetId),
+          child: EditorScreen(
+            imagePath: imagePath,
+            assetId: assetId,
+            assetList: assetList,
+            initialIndex: initialIndex,
+          ),
+          transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 300),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/video',
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: VideoPlayerScreen(
+            videoPath: extra['path'] as String,
+            assetId: extra['assetId'] as String,
+          ),
           transitionsBuilder: (context, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
           transitionDuration: const Duration(milliseconds: 300),
