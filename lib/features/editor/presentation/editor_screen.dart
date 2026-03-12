@@ -453,7 +453,7 @@ class _EditorScreenState extends State<EditorScreen> {
           _CircleBtn(
             icon: Icons.compare_rounded,
             active: _isComparing,
-            onTap: _isVideo ? null : () { HapticFeedback.selectionClick(); setState(() => _isComparing = !_isComparing); },
+            onTap: () { HapticFeedback.selectionClick(); setState(() => _isComparing = !_isComparing); },
           ),
           const SizedBox(width: 8),
           // 삭제
@@ -548,6 +548,23 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildPhotoContent() {
+    // ── 비교 모드 (이미지·비디오 공통) ──────────────────────────────────────
+    // 비디오는 컨트롤러 초기화 완료 후에만 비교 모드 진입
+    if (_isComparing && (!_isVideo || (_videoCtrl?.value.isInitialized == true))) {
+      final filterName = _selectedFilterId == null
+          ? '현재'
+          : BWFilters.all.firstWhere((f) => f.id == _selectedFilterId,
+              orElse: () => BWFilters.all.first).name;
+      return _CompareOverlay(
+        imagePath: _currentPath,
+        colorFilter: _buildFilter(),
+        vignetteIntensity: _vignette / 100,
+        grainIntensity: _grain / 100,
+        videoController: _isVideo ? _videoCtrl : null,
+        afterLabel: filterName,
+      );
+    }
+
     // ── 비디오 ──────────────────────────────────────────────────────────────
     if (_isVideo) {
       final ctrl = _videoCtrl;
@@ -621,16 +638,6 @@ class _EditorScreenState extends State<EditorScreen> {
               );
             }),
         ],
-      );
-    }
-
-    // ── 비교 모드 ───────────────────────────────────────────────────────────
-    if (_isComparing) {
-      return _CompareOverlay(
-        imagePath: _currentPath,
-        colorFilter: _buildFilter(),
-        vignetteIntensity: _vignette / 100,
-        grainIntensity: _grain / 100,
       );
     }
 
@@ -946,11 +953,15 @@ class _CompareOverlay extends StatefulWidget {
     required this.colorFilter,
     required this.vignetteIntensity,
     required this.grainIntensity,
+    this.videoController,
+    this.afterLabel = '현재',
   });
   final String imagePath;
   final ColorFilter colorFilter;
   final double vignetteIntensity;
   final double grainIntensity;
+  final VideoPlayerController? videoController;
+  final String afterLabel;
 
   @override
   State<_CompareOverlay> createState() => _CompareOverlayState();
@@ -973,18 +984,35 @@ class _CompareOverlayState extends State<_CompareOverlay> {
         child: Stack(children: [
           // Before: 원본 (전체, 동일 크기/정렬)
           Positioned.fill(
-            child: Image.file(File(widget.imagePath),
-                fit: BoxFit.contain, gaplessPlayback: true),
+            child: widget.videoController != null
+                ? FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: widget.videoController!.value.size.width,
+                      height: widget.videoController!.value.size.height,
+                      child: VideoPlayer(widget.videoController!),
+                    ),
+                  )
+                : Image.file(File(widget.imagePath),
+                    fit: BoxFit.contain, gaplessPlayback: true),
           ),
           // After: 필터 적용, CustomClipper로 오른쪽만 노출
-          // 두 이미지 모두 Positioned.fill이므로 픽셀 단위 정렬 보장
           Positioned.fill(
             child: ClipRect(
               clipper: _SplitClipper(_splitX),
               child: ColorFiltered(
                 colorFilter: widget.colorFilter,
-                child: Image.file(File(widget.imagePath),
-                    fit: BoxFit.contain, gaplessPlayback: true),
+                child: widget.videoController != null
+                    ? FittedBox(
+                        fit: BoxFit.contain,
+                        child: SizedBox(
+                          width: widget.videoController!.value.size.width,
+                          height: widget.videoController!.value.size.height,
+                          child: VideoPlayer(widget.videoController!),
+                        ),
+                      )
+                    : Image.file(File(widget.imagePath),
+                        fit: BoxFit.contain, gaplessPlayback: true),
               ),
             ),
           ),
@@ -1006,12 +1034,12 @@ class _CompareOverlayState extends State<_CompareOverlay> {
           Positioned(
             left: max(8, splitPx - 14 - 8 - 56).toDouble(),
             top: h / 2 - 13,
-            child: _SplitLabel(text: 'Before')),
+            child: _SplitLabel(text: '원본')),
           // After 레이블 (핸들 오른쪽)
           Positioned(
             left: min(w - 64, splitPx + 14 + 8).toDouble(),
             top: h / 2 - 13,
-            child: _SplitLabel(text: 'After')),
+            child: _SplitLabel(text: widget.afterLabel)),
         ]),
       );
     });

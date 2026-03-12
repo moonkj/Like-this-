@@ -21,49 +21,17 @@ class BeautyPanel extends StatefulWidget {
   const BeautyPanel({
     super.key,
     required this.onChanged,
-    required this.visible,
   });
 
   final void Function(BeautyMode mode, double intensity) onChanged;
-  final bool visible;
 
   @override
   State<BeautyPanel> createState() => _BeautyPanelState();
 }
 
-class _BeautyPanelState extends State<BeautyPanel>
-    with SingleTickerProviderStateMixin {
+class _BeautyPanelState extends State<BeautyPanel> {
   BeautyMode _mode = BeautyMode.soft;
   double _intensity = 0.5;
-
-  late final AnimationController _anim;
-  late final Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 280),
-    );
-    _fadeAnim = CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic);
-    if (widget.visible) _anim.forward();
-  }
-
-  @override
-  void dispose() {
-    _anim.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(BeautyPanel old) {
-    super.didUpdateWidget(old);
-    if (widget.visible != old.visible) {
-      if (widget.visible) _anim.forward();
-      else _anim.reverse();
-    }
-  }
 
   void _selectMode(BeautyMode mode) {
     HapticFeedback.selectionClick();
@@ -73,9 +41,7 @@ class _BeautyPanelState extends State<BeautyPanel>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fadeAnim,
-      child: Container(
+    return Container(
         color: AppColors.background,
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
         child: Column(
@@ -170,7 +136,6 @@ class _BeautyPanelState extends State<BeautyPanel>
             ),
           ],
         ),
-      ),
     );
   }
 }

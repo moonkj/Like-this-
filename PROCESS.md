@@ -523,6 +523,32 @@
 
 ---
 
+## Sprint 16 — 에디터 동영상 비교 & 카메라 전환 애니메이션 수정 (2026-03-12)
+
+### ✅ 완료
+
+#### Sprint 16-1: CLAUDE.md 워크플로우 8단계 확장
+- [x] 기존 4단계(설계자/코더/디버거/리뷰어) → 8단계로 재작성
+- [x] 추가 단계: (1) UX 설계자, (5) 테스트 작성자, (7) 성능·최적화, (8) 문서화
+- [x] (7)(8)은 요청 시에만 수행 명시
+
+#### Sprint 16-2: 에디터 동영상 비교 모드 버그 수정
+- [x] 비교 버튼 `onTap`에서 `_isVideo ? null` 조건 제거 → 동영상 비교 활성화
+- [x] `_buildPhotoContent()`에서 `_isComparing` 블록을 `_isVideo` 블록 앞으로 이동 (구조적 버그 해결)
+- [x] `_CompareOverlay`에 `videoController` / `afterLabel` 파라미터 추가
+- [x] Before(원본) / After(필터명) VideoPlayer 동일 컨트롤러로 프레임 동기화 렌더링
+- [x] 비교 레이블: 왼쪽 "원본" / 오른쪽 현재 필터 이름 (`BWFilters.all.firstWhere`)
+
+#### Sprint 16-3: 카메라 뷰 전환 끊김 수정
+- **증상**: 필터 상자 ↔ 효과 아이콘 전환 시 화면이 끊겨 보임
+- **원인**: `AnimatedSwitcher`(200ms) + `BeautyPanel` 내부 `FadeTransition`(280ms) 이중 opacity 애니메이션
+- [x] `BeautyPanel` 내부 `AnimationController` + `FadeTransition` + `visible` 파라미터 완전 제거
+- [x] `SingleTickerProviderStateMixin` 제거
+- [x] `camera_screen.dart` `visible: true` 파라미터 제거
+- [x] `AnimatedSwitcher`(200ms) 단독으로 fade 전환 담당 → 부드러운 전환 보장
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용

@@ -663,7 +663,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               child: _showBeautyPanel
                   ? BeautyPanel(
                       key: const ValueKey('beauty'),
-                      visible: true,
                       onChanged: (mode, intensity) {
                         ref.read(cameraProvider.notifier).setBeauty(mode.name, intensity);
                       },
