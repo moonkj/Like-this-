@@ -434,6 +434,12 @@
 - [x] 필터 바 기본값 열림, 필터/효과 버튼 상호 전환(닫힘 없음)
 - [x] 필터 목록 맨 앞 "없음" 아이템 추가
 
+#### Sprint 13-6: 비교 모드 캡처 분할선 제거
+- [x] `MFBWEngine.buildImageForCapture(from:)` 추가 — 비교 분할선 없이 필터만 적용
+- [x] `MFCameraSession.photoOutput` — `buildImage` → `buildImageForCapture` 전환 (사진 캡처 시 분할선 제외)
+- [x] `MFCameraSession.captureOutput` 녹화 경로 — `buildImageForCapture` 사용 (동영상 프레임 분할선 제외)
+- 비교 모드 ON 상태에서 촬영/녹화해도 저장 파일에는 필터만 적용됨 (분할선 없음)
+
 ---
 
 ## 기술 결정 로그 (ADR)

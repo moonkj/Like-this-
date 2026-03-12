@@ -59,6 +59,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Timer? _zoomTimer;
   Timer? _sideButtonTimer;
   bool _showSideButtons = true;
+  Timer? _intensityPanelTimer;
   VoidCallback? _routeListener;
 
   @override
@@ -76,6 +77,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (!_showSideButtons) setState(() => _showSideButtons = true);
     _sideButtonTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) setState(() => _showSideButtons = false);
+    });
+  }
+
+  void _resetIntensityPanelTimer() {
+    _intensityPanelTimer?.cancel();
+    _intensityPanelTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() { _showIntensityPanel = false; });
     });
   }
 
@@ -306,10 +314,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                       ),
                     ),
 
-                  // 상단 바
+                  // 상단 바 (사이드 버튼과 함께 숨김)
                   Positioned(
                     top: 0, left: 0, right: 0,
-                    child: _buildTopBar(camState),
+                    child: IgnorePointer(
+                      ignoring: !_showSideButtons,
+                      child: AnimatedOpacity(
+                        opacity: _showSideButtons ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 400),
+                        child: _buildTopBar(camState),
+                      ),
+                    ),
                   ),
 
                   // 우측 플로팅 버튼 (5초 후 자동 숨김)
@@ -545,6 +560,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             _resetSideButtonTimer();
             HapticFeedback.selectionClick();
             setState(() => _showIntensityPanel = !_showIntensityPanel);
+            if (_showIntensityPanel) _resetIntensityPanelTimer();
+            else _intensityPanelTimer?.cancel();
           },
         ),
         const SizedBox(height: 12),
@@ -611,8 +628,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               ),
               child: Slider(
                 value: camState.filterIntensity,
-                onChanged: (v) =>
-                    ref.read(cameraProvider.notifier).setFilterIntensity(v),
+                onChanged: (v) {
+                  ref.read(cameraProvider.notifier).setFilterIntensity(v);
+                  _resetIntensityPanelTimer();
+                },
               ),
             ),
           ),

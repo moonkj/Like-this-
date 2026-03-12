@@ -247,7 +247,9 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptu
         }
         if videoRecorder.isRecording {
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            videoRecorder.appendVideo(ciImage: processed, context: bwEngine.context, at: pts)
+            // 녹화 프레임은 비교 분할선 없이 필터만 적용
+            let captureFrame = bwEngine.buildImageForCapture(from: inputImage)
+            videoRecorder.appendVideo(ciImage: captureFrame, context: bwEngine.context, at: pts)
         }
     }
 }
@@ -264,8 +266,8 @@ extension MFCameraSession: AVCapturePhotoCaptureDelegate {
             photoCaptureCompletion?(nil); return
         }
 
-        // B&W 엔진 적용
-        let processed = bwEngine.buildImage(from: ciInput)
+        // B&W 엔진 적용 — 캡처 전용 (비교 분할선 제외)
+        let processed = bwEngine.buildImageForCapture(from: ciInput)
         guard let cgImage = bwEngine.context.createCGImage(processed, from: processed.extent) else {
             photoCaptureCompletion?(nil); return
         }

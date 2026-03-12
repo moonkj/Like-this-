@@ -100,6 +100,11 @@ final class MFBWEngine {
         return processed
     }
 
+    /// 캡처 전용 — 비교 모드 무관하게 필터만 적용 (분할선 없음)
+    func buildImageForCapture(from input: CIImage) -> CIImage {
+        return buildProcessed(from: input)
+    }
+
     private func buildProcessed(from input: CIImage) -> CIImage {
         let bwBase = toBW(input)
         let toned  = applyTone(bwBase)
