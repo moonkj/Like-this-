@@ -235,10 +235,19 @@ class _EditorScreenState extends State<EditorScreen> {
     try {
       // ── 동영상 저장 ─────────────────────────────────────────────────────
       if (_isVideo && !_cropChanged) {
-        // 크롭 없이 효과만 적용: 원본 영상 저장 (영상 프레임 필터 적용은 미지원)
-        final file = File(_currentPath);
+        // 효과 적용 후 프레임별 렌더링 저장 (네이티브 CIFilter 파이프라인)
+        final dir  = await getTemporaryDirectory();
         final name = 'likethis_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
-        await PhotoManager.editor.saveVideo(file, title: name);
+        final outputPath = '${dir.path}/$name';
+        final resultPath = await CameraEngine.processAndSaveVideo(
+          sourcePath:  _currentPath,
+          colorMatrix: _buildFilterMatrix(),
+          vignette:    _vignette / 100.0,
+          grain:       _grain    / 100.0,
+          outputPath:  outputPath,
+        );
+        if (resultPath == null) throw Exception('영상 처리 실패');
+        await PhotoManager.editor.saveVideo(File(resultPath), title: name);
         HapticFeedback.lightImpact();
         if (mounted) context.pop();
         return;

@@ -111,6 +111,25 @@ class CameraEngine {
     });
   }
 
+  /// 동영상 프레임별 CIFilter 적용 후 저장 — iOS 전용
+  /// colorMatrix: Flutter ColorFilter.matrix와 동일한 4×5 행렬 (20개 double)
+  /// 반환: 저장된 mp4 임시 파일 경로, 실패 시 null
+  static Future<String?> processAndSaveVideo({
+    required String sourcePath,
+    required List<double> colorMatrix,
+    required double vignette,
+    required double grain,
+    required String outputPath,
+  }) async {
+    return _channel.invokeMethod<String>('processAndSaveVideo', {
+      'sourcePath': sourcePath,
+      'colorMatrix': colorMatrix,
+      'vignette': vignette,
+      'grain': grain,
+      'outputPath': outputPath,
+    });
+  }
+
   /// 동영상 크롭 — 정규화 좌표 (0~1) 기준
   /// 반환: 크롭된 동영상 파일 경로, 실패 시 null
   static Future<String?> cropVideo({

@@ -117,6 +117,11 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 result.error("NOT_IMPLEMENTED", "processAndSaveImage is not supported on Android yet", null)
             }
 
+            "processAndSaveVideo" -> {
+                // Android 미구현 — iOS 전용
+                result.error("NOT_IMPLEMENTED", "processAndSaveVideo is not supported on Android yet", null)
+            }
+
             // ── 필터 채널 ─────────────────────────────────────────────────────────
             "loadLUT" -> {
                 val assetPath = call.argument<String>("assetPath") ?: ""
