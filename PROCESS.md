@@ -675,6 +675,20 @@
 
 ---
 
+## Sprint 20 — 카메라 사이드바 타이머 연동
+
+### ✅ 완료 (2026-03-14)
+
+#### Sprint 20-1: 필터 강도 슬라이더 사용 중 사이드바 유지
+- [x] `_resetIntensityPanelTimer()` 내에서 `_sideButtonTimer?.cancel()` 추가
+  - 슬라이더 드래그 중 사이드바 독립 타이머가 사이드바를 숨기지 않도록 방지
+- [x] intensity panel 5초 타임아웃 시 `_showSideButtons = false` 동시 처리
+  - 사이드바와 강도 패널이 동시에 사라지는 일관된 UX
+- [x] tune 버튼으로 intensity panel 수동 닫을 때 `_resetSideButtonTimer()` 호출
+  - 패널 닫힌 후 사이드바가 독립적으로 5초 카운트다운 재개
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용

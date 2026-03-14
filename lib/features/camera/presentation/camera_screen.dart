@@ -86,8 +86,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   void _resetIntensityPanelTimer() {
     _intensityPanelTimer?.cancel();
+    _sideButtonTimer?.cancel(); // 슬라이더 사용 중엔 사이드바도 유지
     _intensityPanelTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) setState(() { _showIntensityPanel = false; });
+      if (mounted) setState(() {
+        _showIntensityPanel = false;
+        _showSideButtons = false; // intensity panel 타임아웃 시 사이드바도 같이 숨김
+      });
     });
   }
 
@@ -561,7 +565,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             HapticFeedback.selectionClick();
             setState(() => _showIntensityPanel = !_showIntensityPanel);
             if (_showIntensityPanel) _resetIntensityPanelTimer();
-            else _intensityPanelTimer?.cancel();
+            else { _intensityPanelTimer?.cancel(); _resetSideButtonTimer(); }
           },
         ),
         const SizedBox(height: 12),
