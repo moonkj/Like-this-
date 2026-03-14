@@ -1,6 +1,7 @@
 package com.likethis.likethis.camera
 
 import android.content.Context
+import android.media.MediaActionSound
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -62,6 +63,8 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             }
 
             "capturePhoto" -> {
+                val playSound = call.argument<Boolean>("shutterSound") ?: false
+                if (playSound) MediaActionSound().play(MediaActionSound.SHUTTER_CLICK)
                 session?.capturePhoto { path ->
                     result.success(path)
                 }

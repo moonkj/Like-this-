@@ -44,6 +44,11 @@ class PreferencesNotifier extends StateNotifier<UserPreferences> {
     await _save();
   }
 
+  Future<void> setShutterSound(bool value) async {
+    state = state.copyWith(shutterSound: value);
+    await _save();
+  }
+
   Future<void> setLastUsedFilter(String filterId) async {
     state = state.copyWith(lastUsedFilterId: filterId);
     await _save();

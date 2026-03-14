@@ -178,11 +178,11 @@ class CameraNotifier extends StateNotifier<CameraState> {
     await CameraEngine.setBeauty(mode, intensity);
   }
 
-  Future<String?> capturePhoto() async {
+  Future<String?> capturePhoto({bool shutterSound = false}) async {
     if (!state.isReady) return null;
     state = state.copyWith(status: CameraStatus.capturing);
     try {
-      final path = await CameraEngine.capturePhoto();
+      final path = await CameraEngine.capturePhoto(shutterSound: shutterSound);
       state = state.copyWith(status: CameraStatus.ready);
       if (path != null) {
         // 썸네일 즉시 업데이트 (save 예외와 무관)

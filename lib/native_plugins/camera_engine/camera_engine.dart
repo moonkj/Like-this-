@@ -36,8 +36,8 @@ class CameraEngine {
   }
 
   /// 사진 촬영 → 저장된 파일 경로 반환
-  static Future<String?> capturePhoto() async {
-    return _channel.invokeMethod<String>('capturePhoto');
+  static Future<String?> capturePhoto({required bool shutterSound}) async {
+    return _channel.invokeMethod<String>('capturePhoto', {'shutterSound': shutterSound});
   }
 
   /// 노출 조절 (-2.0 ~ +2.0 EV)

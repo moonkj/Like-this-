@@ -7,6 +7,7 @@ class UserPreferences {
     this.defaultVignette = 15.0,
     this.hapticEnabled = true,
     this.saveToGallery = true,
+    this.shutterSound = false,
     this.totalPhotosCaptured = 0,
   });
 
@@ -16,6 +17,7 @@ class UserPreferences {
   double defaultVignette;
   bool hapticEnabled;
   bool saveToGallery;
+  bool shutterSound;
   int totalPhotosCaptured;
 
   bool isFavorite(String filterId) => favoriteFilterIds.contains(filterId);
@@ -35,6 +37,7 @@ class UserPreferences {
     double? defaultVignette,
     bool? hapticEnabled,
     bool? saveToGallery,
+    bool? shutterSound,
     int? totalPhotosCaptured,
   }) => UserPreferences(
     lastUsedFilterId: lastUsedFilterId ?? this.lastUsedFilterId,
@@ -43,6 +46,7 @@ class UserPreferences {
     defaultVignette: defaultVignette ?? this.defaultVignette,
     hapticEnabled: hapticEnabled ?? this.hapticEnabled,
     saveToGallery: saveToGallery ?? this.saveToGallery,
+    shutterSound: shutterSound ?? this.shutterSound,
     totalPhotosCaptured: totalPhotosCaptured ?? this.totalPhotosCaptured,
   );
 
@@ -54,6 +58,7 @@ class UserPreferences {
     defaultVignette: (json['defaultVignette'] as num?)?.toDouble() ?? 15.0,
     hapticEnabled: json['hapticEnabled'] as bool? ?? true,
     saveToGallery: json['saveToGallery'] as bool? ?? true,
+    shutterSound: json['shutterSound'] as bool? ?? false,
     totalPhotosCaptured: json['totalPhotosCaptured'] as int? ?? 0,
   );
 
@@ -64,6 +69,7 @@ class UserPreferences {
     'defaultVignette': defaultVignette,
     'hapticEnabled': hapticEnabled,
     'saveToGallery': saveToGallery,
+    'shutterSound': shutterSound,
     'totalPhotosCaptured': totalPhotosCaptured,
   };
 }

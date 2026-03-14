@@ -51,6 +51,16 @@ class SettingsScreen extends ConsumerWidget {
                   inactiveTrackColor: AppColors.border,
                 ),
               ),
+              _SettingsItem(
+                icon: Icons.volume_up_outlined,
+                label: '셔터음',
+                trailing: Switch(
+                  value: prefs.shutterSound,
+                  onChanged: (v) => notifier.setShutterSound(v),
+                  activeColor: AppColors.silver,
+                  inactiveTrackColor: AppColors.border,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppDimensions.spaceL),

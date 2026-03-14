@@ -8,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/models/camera_state.dart';
 import '../../../core/models/filter_model.dart';
 import '../providers/camera_provider.dart';
+import '../../../core/services/preferences_service.dart';
 import '../../../native_plugins/camera_engine/camera_engine.dart';
 import 'widgets/shutter_button.dart';
 import 'widgets/filter_scroll_bar.dart';
@@ -249,7 +250,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Future<void> _captureWithTimer() async {
     if (_isCountingDown) return;
     if (_timerSeconds == 0) {
-      ref.read(cameraProvider.notifier).capturePhoto();
+      ref.read(cameraProvider.notifier).capturePhoto(
+        shutterSound: ref.read(preferencesProvider).shutterSound,
+      );
       return;
     }
     setState(() { _isCountingDown = true; _countdownValue = _timerSeconds; });

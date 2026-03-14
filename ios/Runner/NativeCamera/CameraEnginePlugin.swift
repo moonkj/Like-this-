@@ -1,3 +1,4 @@
+import AudioToolbox
 import AVFoundation
 import Flutter
 import UIKit
@@ -53,6 +54,8 @@ final class LikeThisCamera: NSObject {
                 self.cameraSession?.resume()
                 result(nil)
             case "capturePhoto":
+                let playSound = (call.arguments as? [String: Any])?["shutterSound"] as? Bool ?? false
+                if playSound { AudioServicesPlaySystemSound(1108) }
                 self.cameraSession?.capturePhoto { path in result(path) }
             case "setExposure":
                 let ev = (call.arguments as? [String: Any])?["ev"] as? Double ?? 0.0
