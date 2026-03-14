@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/filter_model.dart';
 import '../../../native_plugins/camera_engine/camera_engine.dart';
+import '../../../l10n/l10n_ext.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({
@@ -55,7 +56,7 @@ class _EditorScreenState extends State<EditorScreen> {
   // 크롭
   Rect   _cropRect     = const Rect.fromLTWH(0, 0, 1, 1); // 정규화 (이미지 비례)
   bool   _cropChanged  = false;
-  String _cropRatioKey = '자유';
+  String _cropRatioKey = 'free';
   ui.Image? _decodedImage;
   Size?     _imageSize;
 
@@ -137,12 +138,12 @@ class _EditorScreenState extends State<EditorScreen> {
   // ── 효과 정의 ────────────────────────────────────────────────────────────
 
   List<_EffectDef> get _effects => [
-    _EffectDef(label: '노출',   icon: Icons.wb_sunny_outlined,          value: _exposure,  min: -100, max: 100, onChanged: (v) => setState(() => _exposure  = v)),
-    _EffectDef(label: '대비',   icon: Icons.contrast,                   value: _contrast,  min: -100, max: 100, onChanged: (v) => setState(() => _contrast  = v)),
-    _EffectDef(label: '그레인', icon: Icons.grain_rounded,              value: _grain,     min: 0,    max: 100, onChanged: (v) => setState(() => _grain     = v)),
-    _EffectDef(label: '비네팅', icon: Icons.vignette_rounded,           value: _vignette,  min: 0,    max: 100, onChanged: (v) => setState(() => _vignette  = v)),
-    _EffectDef(label: '빛번짐', icon: Icons.flare_rounded,              value: _lightLeak, min: 0,    max: 100, onChanged: (v) => setState(() => _lightLeak = v)),
-    _EffectDef(label: '글로우', icon: Icons.blur_on_rounded,            value: _bloom,     min: 0,    max: 100, onChanged: (v) => setState(() => _bloom     = v)),
+    _EffectDef(label: context.l10n.exposure,  icon: Icons.wb_sunny_outlined,  value: _exposure,  min: -100, max: 100, onChanged: (v) => setState(() => _exposure  = v)),
+    _EffectDef(label: context.l10n.contrast,  icon: Icons.contrast,           value: _contrast,  min: -100, max: 100, onChanged: (v) => setState(() => _contrast  = v)),
+    _EffectDef(label: context.l10n.grain,     icon: Icons.grain_rounded,      value: _grain,     min: 0,    max: 100, onChanged: (v) => setState(() => _grain     = v)),
+    _EffectDef(label: context.l10n.vignette,  icon: Icons.vignette_rounded,   value: _vignette,  min: 0,    max: 100, onChanged: (v) => setState(() => _vignette  = v)),
+    _EffectDef(label: context.l10n.lightLeak, icon: Icons.flare_rounded,      value: _lightLeak, min: 0,    max: 100, onChanged: (v) => setState(() => _lightLeak = v)),
+    _EffectDef(label: context.l10n.bloom,     icon: Icons.blur_on_rounded,    value: _bloom,     min: 0,    max: 100, onChanged: (v) => setState(() => _bloom     = v)),
   ];
 
   bool get _hasChanges =>
@@ -205,7 +206,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _vignette = 0; _lightLeak = 0; _bloom = 0;
       _selectedFilterId = null; _filterIntensity = 1.0;
       _cropRect = const Rect.fromLTWH(0, 0, 1, 1);
-      _cropChanged = false; _cropRatioKey = '자유';
+      _cropChanged = false; _cropRatioKey = 'free';
     });
   }
 
@@ -247,7 +248,7 @@ class _EditorScreenState extends State<EditorScreen> {
           bloom:       _bloom      / 100.0,
           outputPath:  outputPath,
         );
-        if (resultPath == null) throw Exception('영상 처리 실패');
+        if (resultPath == null) throw Exception(context.l10n.videoProcessError);
         await PhotoManager.editor.saveVideo(File(resultPath), title: name);
         HapticFeedback.lightImpact();
         if (mounted) context.pop();
@@ -298,7 +299,7 @@ class _EditorScreenState extends State<EditorScreen> {
         cropW: _cropChanged ? _cropRect.width  : 1.0,
         cropH: _cropChanged ? _cropRect.height : 1.0,
       );
-      if (resultPath == null) throw Exception('네이티브 처리 실패');
+      if (resultPath == null) throw Exception(context.l10n.nativeProcessError);
 
       await PhotoManager.editor.saveImageWithPath(resultPath, title: name);
       HapticFeedback.lightImpact();
@@ -306,7 +307,7 @@ class _EditorScreenState extends State<EditorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('저장 실패: $e'),
+          SnackBar(content: Text(context.l10n.saveError(e.toString())),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 6)),
         );
@@ -352,15 +353,15 @@ class _EditorScreenState extends State<EditorScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceElevated,
-        title: const Text('사진을 삭제하시겠습니까?',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 16)),
-        content: const Text('삭제된 사진은 복구할 수 없습니다.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        title: Text(context.l10n.deletePhotoConfirm,
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+        content: Text(context.l10n.deleteWarning,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('취소', style: TextStyle(color: AppColors.textSecondary))),
+              child: Text(context.l10n.cancel, style: const TextStyle(color: AppColors.textSecondary))),
           TextButton(onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('삭제', style: TextStyle(color: Colors.red))),
+              child: Text(context.l10n.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -370,7 +371,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (!perm.isAuth && !perm.hasAccess) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('사진 접근 권한이 필요합니다.'),
+          SnackBar(content: Text(context.l10n.photoPermissionRequired),
               behavior: SnackBarBehavior.floating));
       }
       return;
@@ -381,7 +382,7 @@ class _EditorScreenState extends State<EditorScreen> {
       context.pop();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('삭제에 실패했습니다. iCloud 사진은 사진 앱에서 삭제해주세요.'),
+        SnackBar(content: Text(context.l10n.deleteFailedICloud),
             behavior: SnackBarBehavior.floating));
     }
   }
@@ -448,8 +449,8 @@ class _EditorScreenState extends State<EditorScreen> {
                   borderRadius: BorderRadius.circular(100),
                   border: Border.all(color: AppColors.border, width: 0.5),
                 ),
-                child: const Text('reset',
-                    style: TextStyle(color: AppColors.textSecondary,
+                child: Text(context.l10n.reset,
+                    style: const TextStyle(color: AppColors.textSecondary,
                         fontSize: 12, fontWeight: FontWeight.w500)),
               ),
             ),
@@ -633,7 +634,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 imageSize: ctrl.value.size,
                 cropRect: _cropRect,
                 onCropChanged: (r) => setState(() {
-                  _cropRect = r; _cropChanged = true; _cropRatioKey = '자유';
+                  _cropRect = r; _cropChanged = true; _cropRatioKey = 'free';
                 }),
               );
             }),
@@ -657,7 +658,7 @@ class _EditorScreenState extends State<EditorScreen> {
               imageSize: _imageSize!,
               cropRect: _cropRect,
               onCropChanged: (r) => setState(() {
-                _cropRect = r; _cropChanged = true; _cropRatioKey = '자유';
+                _cropRect = r; _cropChanged = true; _cropRatioKey = 'free';
               }),
             ),
         ]);
@@ -750,7 +751,7 @@ class _EditorScreenState extends State<EditorScreen> {
               itemBuilder: (_, i) {
                 if (i == 0) {
                   return _FilterItem(
-                    label: '없음', thumbPath: null,
+                    label: context.l10n.none, thumbPath: null,
                     selected: _selectedFilterId == null,
                     onTap: () { HapticFeedback.selectionClick(); setState(() => _selectedFilterId = null); },
                   );
@@ -887,9 +888,11 @@ class _EditorScreenState extends State<EditorScreen> {
   // ── 자르기 탭 ─────────────────────────────────────────────────────────────
 
   Widget _buildCropContent() {
-    const ratios = <String, double?>{
-      '자유': null, '1:1': 1.0, '3:4': 3/4, '4:3': 4/3, '16:9': 16/9, '9:16': 9/16,
+    // 내부 키는 고정값, 표시 레이블만 l10n 변환
+    const ratioKeys = <String, double?>{
+      'free': null, '1:1': 1.0, '3:4': 3/4, '4:3': 4/3, '16:9': 16/9, '9:16': 9/16,
     };
+    String displayLabel(String key) => key == 'free' ? context.l10n.free : key;
     return Container(
       key: const ValueKey('crop'),
       color: Colors.black,
@@ -901,7 +904,7 @@ class _EditorScreenState extends State<EditorScreen> {
             height: 44,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: ratios.entries.map((e) {
+              children: ratioKeys.entries.map((e) {
                 final sel = _cropRatioKey == e.key;
                 return GestureDetector(
                   onTap: () {
@@ -916,7 +919,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       borderRadius: BorderRadius.circular(100),
                       border: sel ? Border.all(color: AppColors.silver, width: 0.5) : null,
                     ),
-                    child: Text(e.key,
+                    child: Text(displayLabel(e.key),
                         style: TextStyle(
                           color: sel ? AppColors.textPrimary : AppColors.textSecondary,
                           fontSize: 13,
@@ -934,11 +937,11 @@ class _EditorScreenState extends State<EditorScreen> {
                 HapticFeedback.selectionClick();
                 setState(() {
                   _cropRect = const Rect.fromLTWH(0, 0, 1, 1);
-                  _cropChanged = false; _cropRatioKey = '자유';
+                  _cropChanged = false; _cropRatioKey = 'free';
                 });
               },
-              child: const Text('크롭 초기화',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              child: Text(context.l10n.resetCrop,
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
             )
           else
             const SizedBox(height: 36),
@@ -959,9 +962,9 @@ class _EditorScreenState extends State<EditorScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _BottomTab(icon: Icons.auto_fix_high_rounded, label: '필터',  selected: _tab == 0, hasChanges: _selectedFilterId != null, onTap: () { HapticFeedback.selectionClick(); setState(() => _tab = 0); }),
-          _BottomTab(icon: Icons.tune_rounded,          label: '효과',  selected: _tab == 1, hasChanges: _exposure != 0 || _contrast != 0 || _grain != 0 || _vignette != 0 || _lightLeak != 0 || _bloom != 0, onTap: () { HapticFeedback.selectionClick(); setState(() => _tab = 1); }),
-          _BottomTab(icon: Icons.crop_rounded,          label: '자르기', selected: _tab == 2, hasChanges: false, onTap: () { HapticFeedback.selectionClick(); setState(() => _tab = 2); }),
+          _BottomTab(icon: Icons.auto_fix_high_rounded, label: context.l10n.filterTab,  selected: _tab == 0, hasChanges: _selectedFilterId != null, onTap: () { HapticFeedback.selectionClick(); setState(() => _tab = 0); }),
+          _BottomTab(icon: Icons.tune_rounded,          label: context.l10n.effectsTab, selected: _tab == 1, hasChanges: _exposure != 0 || _contrast != 0 || _grain != 0 || _vignette != 0 || _lightLeak != 0 || _bloom != 0, onTap: () { HapticFeedback.selectionClick(); setState(() => _tab = 1); }),
+          _BottomTab(icon: Icons.crop_rounded,          label: context.l10n.cropTab,    selected: _tab == 2, hasChanges: false, onTap: () { HapticFeedback.selectionClick(); setState(() => _tab = 2); }),
         ],
       ),
     );

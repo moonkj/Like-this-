@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/filter_model.dart';
 import '../../../native_plugins/camera_engine/camera_engine.dart';
+import '../../../l10n/l10n_ext.dart';
 
 /// 갤러리 화면 — Like It! 구조 기반, Like This 색상 적용
 class GalleryScreen extends StatefulWidget {
@@ -282,7 +283,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('$savedCount개 필터 적용 완료 (원본 유지)'),
+      content: Text(context.l10n.filterApplied(savedCount)),
       backgroundColor: AppColors.surfaceElevated,
       behavior: SnackBarBehavior.floating,
     ));
@@ -323,21 +324,21 @@ class _GalleryScreenState extends State<GalleryScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceElevated,
         title: Text(
-          '$count장을 삭제하시겠습니까?',
+          context.l10n.deleteConfirmTitle(count),
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
         ),
-        content: const Text(
-          '삭제된 사진은 복구할 수 없습니다.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        content: Text(
+          context.l10n.deleteWarning,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('취소', style: TextStyle(color: AppColors.textSecondary)),
+            child: Text(context.l10n.cancel, style: const TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+            child: Text(context.l10n.delete, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -358,7 +359,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${ids.length}장 삭제됨'),
+          content: Text(context.l10n.deletedCount(ids.length)),
           backgroundColor: AppColors.surfaceElevated,
           behavior: SnackBarBehavior.floating,
         ),
@@ -411,8 +412,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 child: _isMultiSelectMode
                     ? Text(
                         _isProcessing
-                            ? '$_processedCount / $_totalCount 처리 중...'
-                            : '${_selectedIds.length}장 선택됨',
+                            ? context.l10n.processingProgress(_processedCount, _totalCount)
+                            : context.l10n.selectedCount(_selectedIds.length),
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 16,
@@ -434,9 +435,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
               if (!_isMultiSelectMode)
                 TextButton(
                   onPressed: _toggleMultiSelectMode,
-                  child: const Text(
-                    '선택',
-                    style: TextStyle(color: AppColors.silver, fontSize: 15),
+                  child: Text(
+                    context.l10n.select,
+                    style: const TextStyle(color: AppColors.silver, fontSize: 15),
                   ),
                 ),
 
@@ -490,10 +491,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _bottomTab(Icons.photo_library_rounded, '앨범', selected: true),
+          _bottomTab(Icons.photo_library_rounded, context.l10n.album, selected: true),
           GestureDetector(
             onTap: () => context.pop(),
-            child: _bottomTab(Icons.camera_alt_rounded, '카메라', selected: false),
+            child: _bottomTab(Icons.camera_alt_rounded, context.l10n.camera, selected: false),
           ),
         ],
       ),
@@ -538,13 +539,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
           children: [
             const Icon(Icons.photo_library_outlined, color: AppColors.textDisabled, size: 48),
             const SizedBox(height: 16),
-            const Text('사진 접근 권한이 필요합니다',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+            Text(context.l10n.photoPermissionRequired,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 15)),
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => PhotoManager.openSetting(),
-              child: const Text('설정에서 허용',
-                  style: TextStyle(color: AppColors.silver)),
+              child: Text(context.l10n.allowInSettings,
+                  style: const TextStyle(color: AppColors.silver)),
             ),
           ],
         ),
@@ -552,9 +553,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
 
     if (_assets.isEmpty) {
-      return const Center(
-        child: Text('사진이 없습니다',
-            style: TextStyle(color: AppColors.textDisabled)),
+      return Center(
+        child: Text(context.l10n.noPhotos,
+            style: const TextStyle(color: AppColors.textDisabled)),
       );
     }
 
@@ -865,9 +866,9 @@ class _FilterPickerSheetState extends State<_FilterPickerSheet> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      '필터 강도',
-                      style: TextStyle(
+                    Text(
+                      context.l10n.filterIntensity,
+                      style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -925,7 +926,7 @@ class _FilterPickerSheetState extends State<_FilterPickerSheet> {
                   ),
                 ),
                 child: Text(
-                  '적용',
+                  context.l10n.apply,
                   style: TextStyle(
                     color: _selected == null
                         ? AppColors.textDisabled

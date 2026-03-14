@@ -188,14 +188,14 @@ abstract final class BWFilters {
 
   /// 순서 있는 전체 목록 (더블탭 사이클 순서)
   static const List<FilterModel> all = [
-    pureThis,
-    deepNoir,
     softGrey,
     bw2k,
     filmDust,
     silverGlow,
     paperLog,
     porcelainBW,
+    pureThis,
+    deepNoir,
     silkyBW,
   ];
 

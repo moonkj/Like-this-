@@ -1,0 +1,71 @@
+{
+  "@@locale": "ko",
+  "photoMode": "사진",
+  "videoMode": "동영상",
+  "cameraInitError": "카메라를 초기화할 수 없습니다.",
+  "cancel": "취소",
+  "delete": "삭제",
+  "apply": "적용",
+  "select": "선택",
+  "settings": "설정",
+  "album": "앨범",
+  "camera": "카메라",
+  "filterTab": "필터",
+  "effectsTab": "효과",
+  "cropTab": "자르기",
+  "none": "없음",
+  "free": "자유",
+  "reset": "reset",
+  "resetCrop": "크롭 초기화",
+  "deleteConfirmTitle": "{count}장을 삭제하시겠습니까?",
+  "@deleteConfirmTitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "deleteWarning": "삭제된 사진은 복구할 수 없습니다.",
+  "deletePhotoConfirm": "사진을 삭제하시겠습니까?",
+  "deletedCount": "{count}장 삭제됨",
+  "@deletedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "deleteFailedICloud": "삭제에 실패했습니다. iCloud 사진은 사진 앱에서 삭제해주세요.",
+  "filterApplied": "{count}개 필터 적용 완료 (원본 유지)",
+  "@filterApplied": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "processingProgress": "{current} / {total} 처리 중...",
+  "@processingProgress": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "selectedCount": "{count}장 선택됨",
+  "@selectedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "photoPermissionRequired": "사진 접근 권한이 필요합니다",
+  "allowInSettings": "설정에서 허용",
+  "noPhotos": "사진이 없습니다",
+  "filterIntensity": "필터 강도",
+  "videoProcessError": "영상 처리 실패",
+  "nativeProcessError": "네이티브 처리 실패",
+  "saveError": "저장 실패: {error}",
+  "@saveError": {
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "exposure": "노출",
+  "contrast": "대비",
+  "grain": "그레인",
+  "vignette": "비네팅",
+  "lightLeak": "빛번짐",
+  "bloom": "글로우",
+  "silentShutter": "무음 셔터",
+  "silentShutterDesc": "촬영음 없이 사진 찍기",
+  "cameraSection": "카메라",
+  "appInfo": "앱 정보",
+  "version": "버전",
+  "privacyPolicy": "개인정보처리방침",
+  "termsOfService": "이용약관",
+  "contact": "문의하기",
+  "appTagline": "Black & White Camera"
+}

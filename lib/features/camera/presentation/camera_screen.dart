@@ -10,6 +10,7 @@ import '../../../core/models/filter_model.dart';
 import '../providers/camera_provider.dart';
 import '../../../core/services/preferences_service.dart';
 import '../../../native_plugins/camera_engine/camera_engine.dart';
+import '../../../l10n/l10n_ext.dart';
 import 'widgets/shutter_button.dart';
 import 'widgets/filter_scroll_bar.dart';
 import 'widgets/exposure_indicator.dart';
@@ -453,7 +454,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  camState.errorMessage ?? '카메라를 초기화할 수 없습니다.',
+                  camState.errorMessage ?? context.l10n.cameraInitError,
                   style: const TextStyle(color: AppColors.error, fontSize: 13),
                   textAlign: TextAlign.center,
                 ),
@@ -692,13 +693,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _ModeTab(
-                label: '사진',
+                label: context.l10n.photoMode,
                 selected: !_isVideoMode,
                 onTap: () => setState(() => _isVideoMode = false),
               ),
               const SizedBox(width: 28),
               _ModeTab(
-                label: '동영상',
+                label: context.l10n.videoMode,
                 selected: _isVideoMode,
                 onTap: () => setState(() => _isVideoMode = true),
               ),

@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_typography.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/services/preferences_service.dart';
+import '../../../l10n/l10n_ext.dart';
 import 'policy_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -24,19 +25,19 @@ class SettingsScreen extends ConsumerWidget {
           onTap: () => context.pop(),
           child: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
         ),
-        title: const Text('설정', style: AppTypography.h2),
+        title: Text(context.l10n.settings, style: AppTypography.h2),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppDimensions.spaceM),
         children: [
           _SettingsSection(
-            title: '카메라',
+            title: context.l10n.cameraSection,
             items: [
               _SettingsItem(
                 icon: Icons.volume_off_outlined,
-                label: '무음 셔터',
-                subtitle: '촬영음 없이 사진 찍기',
+                label: context.l10n.silentShutter,
+                subtitle: context.l10n.silentShutterDesc,
                 trailing: Switch(
                   // 무음 셔터 ON = shutterSound false (소리 안 냄)
                   value: !prefs.shutterSound,
@@ -49,16 +50,16 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppDimensions.spaceL),
           _SettingsSection(
-            title: '앱 정보',
+            title: context.l10n.appInfo,
             items: [
-              const _SettingsItem(
+              _SettingsItem(
                 icon: Icons.info_outline,
-                label: '버전',
-                trailing: Text('1.0.0', style: AppTypography.bodySmall),
+                label: context.l10n.version,
+                trailing: const Text('1.0.0', style: AppTypography.bodySmall),
               ),
               _SettingsItem(
                 icon: Icons.privacy_tip_outlined,
-                label: '개인정보처리방침',
+                label: context.l10n.privacyPolicy,
                 trailing: const Icon(Icons.chevron_right, color: AppColors.silver, size: 20),
                 onTap: () => Navigator.push(
                   context,
@@ -67,7 +68,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               _SettingsItem(
                 icon: Icons.description_outlined,
-                label: '이용약관',
+                label: context.l10n.termsOfService,
                 trailing: const Icon(Icons.chevron_right, color: AppColors.silver, size: 20),
                 onTap: () => Navigator.push(
                   context,
@@ -76,7 +77,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               _SettingsItem(
                 icon: Icons.mail_outline,
-                label: '문의하기',
+                label: context.l10n.contact,
                 trailing: const Icon(Icons.chevron_right, color: AppColors.silver, size: 20),
                 onTap: () => launchUrl(
                   Uri.parse('mailto:imurmkj@gmail.com?subject=Like This! 문의'),
