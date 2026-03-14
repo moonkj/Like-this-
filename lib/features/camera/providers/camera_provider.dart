@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../../../core/models/camera_state.dart';
@@ -208,10 +209,22 @@ class CameraNotifier extends StateNotifier<CameraState> {
         final path = await CameraEngine.stopRecording();
         state = state.copyWith(status: CameraStatus.ready);
         if (path != null) {
-          await PhotoManager.editor.saveVideo(
+          final entity = await PhotoManager.editor.saveVideo(
             File(path),
             title: 'LikeThis_video_${DateTime.now().millisecondsSinceEpoch}',
           );
+          if (entity != null) {
+            final Uint8List? thumbData = await entity.thumbnailDataWithSize(
+              const ThumbnailSize.square(200),
+            );
+            if (thumbData != null) {
+              final thumbFile = File(
+                '${(await Directory.systemTemp.createTemp('lt_thumb')).path}/thumb.jpg',
+              );
+              await thumbFile.writeAsBytes(thumbData);
+              state = state.copyWith(lastCapturedPath: thumbFile.path);
+            }
+          }
         }
       } catch (_) {
         state = state.copyWith(status: CameraStatus.ready);
