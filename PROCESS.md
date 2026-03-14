@@ -21,6 +21,7 @@
 | Sprint 20 | 필터 강도 슬라이더 사용 중 사이드바 유지 | ✅ 완료 |
 | Sprint 21 | 갤러리 배치 처리 성능 개선 | ✅ 완료 |
 | Sprint 22 | 무음 셔터 설정 + 설정화면 개편 | ✅ 완료 |
+| Sprint 23 | 갤러리 배치 필터 HEIC 버그 수정 + 갤러리 썸네일 비율 버그 수정 | ✅ 완료 |
 
 ---
 
@@ -723,6 +724,29 @@
 - [x] `policy_screen.dart` 신규 생성 — 개인정보처리방침 / 이용약관 인앱 표시
 - [x] 문의하기 — `url_launcher` `mailto:` 링크로 기본 메일 앱 호출
 - [x] `url_launcher ^6.3.1` 의존성 추가
+
+---
+
+## Sprint 23 — 갤러리 버그 수정 (2026-03-14)
+
+### ✅ 완료
+
+#### Sprint 23-1: 갤러리 배치 필터 HEIC 버그 수정
+- **증상**: 갤러리에서 사진 여러 장 선택 후 필터 일괄 적용 시 아무것도 저장되지 않음
+- **원인**: `compute(_renderSingleImage)` — Dart 아이솔레이트에서 `dart:ui` HEIC 디코딩 불가 (iPhone 기본 포맷)
+  - `ui.ImageDescriptor.encoded()`가 HEIC를 지원 안 해 null 반환 → `catch(_) { return null }` 에 의해 묵살
+- **해결**: Dart 기반 렌더링 전체 제거 → `CameraEngine.processAndSaveImage()` 로 교체
+  - 네이티브 `UIImage(contentsOfFile:)` — HEIC/JPEG/PNG 모두 처리
+  - `_RenderParams`, `_renderSingleImage`, `dart:ui`, `foundation.dart` import 제거
+- [x] `_applyFilterToSelected` 이미지 처리 루프 교체
+- [x] 동영상은 기존 `CameraEngine.processAndSaveVideo()` 유지
+
+#### Sprint 23-2: 갤러리 썸네일 (카메라 하단 버튼) 비율 왜곡 버그 수정
+- **증상**: 사진 촬영 후 카메라 화면 좌하단 갤러리 버튼에 사진이 찌그러져 보임
+- **원인**: `Image.file(cacheWidth: 104, cacheHeight: 104)` — 두 값 동시 지정 시 Flutter가 이미지를 강제로 1:1로 디코딩
+  - 3:4 사진 → 104×104 픽셀로 왜곡 디코딩 → `BoxFit.cover` 적용 전 이미 비율 손상
+- **해결**: `cacheHeight` 제거 → `cacheWidth: 104`만 지정 → 비율 유지 디코딩 후 `BoxFit.cover` 센터 크롭
+- [x] `_GalleryThumb.cacheHeight` 제거
 
 ---
 

@@ -984,7 +984,7 @@ class _GalleryThumb extends StatelessWidget {
                 File(path!),
                 width: 52, height: 52,
                 fit: BoxFit.cover,
-                cacheWidth: 104, cacheHeight: 104,
+                cacheWidth: 104,
               )
             : Container(
                 decoration: BoxDecoration(

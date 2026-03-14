@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -9,71 +7,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/filter_model.dart';
-
-// ── 배치 렌더 파라미터 (Isolate 전달용) ────────────────────────────────────────
-
-class _RenderParams {
-  final String inputPath;
-  final List<double> matrix;
-  final double vignetteStrength;
-  final String outDir;
-  final int index;
-
-  const _RenderParams({
-    required this.inputPath,
-    required this.matrix,
-    required this.vignetteStrength,
-    required this.outDir,
-    required this.index,
-  });
-}
-
-Future<String?> _renderSingleImage(_RenderParams p) async {
-  try {
-    final bytes = await File(p.inputPath).readAsBytes();
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    final descriptor = await ui.ImageDescriptor.encoded(buffer);
-    final codec = await descriptor.instantiateCodec();
-    final frame = await codec.getNextFrame();
-    final img = frame.image;
-    final w = img.width.toDouble();
-    final h = img.height.toDouble();
-
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
-    canvas.drawImage(img, Offset.zero, Paint()..colorFilter = ColorFilter.matrix(p.matrix));
-
-    if (p.vignetteStrength > 0) {
-      canvas.drawRect(
-        Rect.fromLTWH(0, 0, w, h),
-        Paint()
-          ..shader = RadialGradient(
-            center: Alignment.center,
-            radius: 1.0,
-            colors: [Colors.transparent, Colors.black.withValues(alpha: p.vignetteStrength)],
-            stops: const [0.35, 1.0],
-          ).createShader(Rect.fromLTWH(0, 0, w, h)),
-      );
-    }
-
-    img.dispose();
-    codec.dispose();
-    descriptor.dispose();
-
-    final picture = recorder.endRecording();
-    final rendered = await picture.toImage(w.round(), h.round());
-    final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
-    rendered.dispose();
-
-    if (byteData == null) return null;
-    final name = 'likethis_batch_${DateTime.now().millisecondsSinceEpoch}_${p.index}.png';
-    final outFile = File('${p.outDir}/$name');
-    await outFile.writeAsBytes(byteData.buffer.asUint8List());
-    return outFile.path;
-  } catch (_) {
-    return null;
-  }
-}
+import '../../../native_plugins/camera_engine/camera_engine.dart';
 
 /// 갤러리 화면 — Like It! 구조 기반, Like This 색상 적용
 class GalleryScreen extends StatefulWidget {
@@ -275,46 +209,67 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   Future<void> _applyFilterToSelected(FilterModel filter, double intensity) async {
     final selected = _assets.where((a) => _selectedIds.contains(a.id)).toList();
-    final videos = selected.where((a) => a.type == AssetType.video).toList();
     final images = selected.where((a) => a.type == AssetType.image).toList();
+    final videos = selected.where((a) => a.type == AssetType.video).toList();
 
-    if (images.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('이미지가 없습니다. 동영상은 처리할 수 없습니다.'),
-        behavior: SnackBarBehavior.floating,
-      ));
-      return;
-    }
+    if (images.isEmpty && videos.isEmpty) return;
 
     setState(() {
       _isProcessing = true;
       _processedCount = 0;
-      _totalCount = images.length;
+      _totalCount = images.length + videos.length;
     });
 
     final matrix = _buildColorMatrix(filter, intensity);
     final vignetteStrength = filter.defaultVignette / 100 * 0.85;
     final dir = await getTemporaryDirectory();
+    int savedCount = 0;
 
+    // ── 이미지 처리 (네이티브 CIImage, HEIC 포함) ──────────────────────────
     for (int i = 0; i < images.length; i++) {
       final file = await images[i].file;
       if (file == null) {
         if (mounted) setState(() => _processedCount++);
         continue;
       }
+      final outPath = '${dir.path}/likethis_img_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+      final result = await CameraEngine.processAndSaveImage(
+        sourcePath: file.path,
+        colorMatrix: matrix,
+        vignette: vignetteStrength,
+        grain: 0.0,
+        lightLeak: 0.0,
+        bloom: 0.0,
+        outputPath: outPath,
+      );
+      if (result != null) {
+        await PhotoManager.editor.saveImageWithPath(result, title: result.split('/').last);
+        savedCount++;
+      }
+      if (mounted) setState(() => _processedCount++);
+    }
 
-      final outPath = await compute(_renderSingleImage, _RenderParams(
-        inputPath: file.path,
-        matrix: matrix,
-        vignetteStrength: vignetteStrength,
-        outDir: dir.path,
-        index: i,
-      ));
-
-      if (outPath != null) {
-        final name = outPath.split('/').last;
-        await PhotoManager.editor.saveImageWithPath(outPath, title: name);
+    // ── 동영상 처리 ───────────────────────────────────────────────────────
+    for (int i = 0; i < videos.length; i++) {
+      final file = await videos[i].file;
+      if (file == null) {
+        if (mounted) setState(() => _processedCount++);
+        continue;
+      }
+      final outName = 'likethis_video_${DateTime.now().millisecondsSinceEpoch}_$i.mp4';
+      final outPath = '${dir.path}/$outName';
+      final result = await CameraEngine.processAndSaveVideo(
+        sourcePath: file.path,
+        colorMatrix: matrix,
+        vignette: vignetteStrength,
+        grain: 0.0,
+        lightLeak: 0.0,
+        bloom: 0.0,
+        outputPath: outPath,
+      );
+      if (result != null) {
+        await PhotoManager.editor.saveVideo(File(result), title: outName);
+        savedCount++;
       }
       if (mounted) setState(() => _processedCount++);
     }
@@ -326,15 +281,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
       _selectedIds.clear();
     });
 
-    String msg = '${images.length}장 필터 적용 완료';
-    if (videos.isNotEmpty) msg += ' (동영상 ${videos.length}개 건너뜀)';
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
+      content: Text('$savedCount개 필터 적용 완료 (원본 유지)'),
       backgroundColor: AppColors.surfaceElevated,
       behavior: SnackBarBehavior.floating,
     ));
 
-    await _prependNewAssets(images.length);
+    await _prependNewAssets(savedCount);
   }
 
   Future<void> _prependNewAssets(int expectedCount) async {
