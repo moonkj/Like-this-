@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,71 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/filter_model.dart';
+
+// ── 배치 렌더 파라미터 (Isolate 전달용) ────────────────────────────────────────
+
+class _RenderParams {
+  final String inputPath;
+  final List<double> matrix;
+  final double vignetteStrength;
+  final String outDir;
+  final int index;
+
+  const _RenderParams({
+    required this.inputPath,
+    required this.matrix,
+    required this.vignetteStrength,
+    required this.outDir,
+    required this.index,
+  });
+}
+
+Future<String?> _renderSingleImage(_RenderParams p) async {
+  try {
+    final bytes = await File(p.inputPath).readAsBytes();
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    final codec = await descriptor.instantiateCodec();
+    final frame = await codec.getNextFrame();
+    final img = frame.image;
+    final w = img.width.toDouble();
+    final h = img.height.toDouble();
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
+    canvas.drawImage(img, Offset.zero, Paint()..colorFilter = ColorFilter.matrix(p.matrix));
+
+    if (p.vignetteStrength > 0) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()
+          ..shader = RadialGradient(
+            center: Alignment.center,
+            radius: 1.0,
+            colors: [Colors.transparent, Colors.black.withValues(alpha: p.vignetteStrength)],
+            stops: const [0.35, 1.0],
+          ).createShader(Rect.fromLTWH(0, 0, w, h)),
+      );
+    }
+
+    img.dispose();
+    codec.dispose();
+    descriptor.dispose();
+
+    final picture = recorder.endRecording();
+    final rendered = await picture.toImage(w.round(), h.round());
+    final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
+    rendered.dispose();
+
+    if (byteData == null) return null;
+    final name = 'likethis_batch_${DateTime.now().millisecondsSinceEpoch}_${p.index}.png';
+    final outFile = File('${p.outDir}/$name');
+    await outFile.writeAsBytes(byteData.buffer.asUint8List());
+    return outFile.path;
+  } catch (_) {
+    return null;
+  }
+}
 
 /// 갤러리 화면 — Like It! 구조 기반, Like This 색상 적용
 class GalleryScreen extends StatefulWidget {
@@ -156,7 +222,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   // ── 필터 파이프라인 (에디터와 동일) ──────────────────────────────────────
 
-  ColorFilter _buildColorFilter(FilterModel filter, double intensity) {
+  List<double> _buildColorMatrix(FilterModel filter, double intensity) {
     final tone = _filterTone(filter.id);
     final fc   = tone[0] * intensity + (1.0 - intensity);
     final fb   = tone[1] * intensity;
@@ -164,13 +230,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
     final bwG  = 0.587 * intensity;
     final bwB  = 0.114 * intensity;
     final keep = 1.0 - intensity;
-    return ColorFilter.matrix([
+    return [
       (bwR + keep) * fc, bwG * fc,          bwB * fc,          0, fb,
       bwR * fc,          (bwG + keep) * fc, bwB * fc,          0, fb,
       bwR * fc,          bwG * fc,          (bwB + keep) * fc, 0, fb,
       0, 0, 0, 1, 0,
-    ]);
+    ];
   }
+
 
   List<double> _filterTone(String id) {
     switch (id) {
@@ -226,57 +293,30 @@ class _GalleryScreenState extends State<GalleryScreen> {
       _totalCount = images.length;
     });
 
-    final colorFilter = _buildColorFilter(filter, intensity);
+    final matrix = _buildColorMatrix(filter, intensity);
     final vignetteStrength = filter.defaultVignette / 100 * 0.85;
     final dir = await getTemporaryDirectory();
 
-    for (final asset in images) {
-      final file = await asset.file;
-      if (file == null) continue;
-
-      try {
-        final bytes = await file.readAsBytes();
-        final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-        final descriptor = await ui.ImageDescriptor.encoded(buffer);
-        final codec = await descriptor.instantiateCodec();
-        final frame = await codec.getNextFrame();
-        final img = frame.image;
-        final w = img.width.toDouble();
-        final h = img.height.toDouble();
-
-        final recorder = ui.PictureRecorder();
-        final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
-        canvas.drawImage(img, Offset.zero, Paint()..colorFilter = colorFilter);
-
-        if (filter.defaultVignette > 0) {
-          final vPaint = Paint()
-            ..shader = RadialGradient(
-              center: Alignment.center,
-              radius: 1.0,
-              colors: [Colors.transparent, Colors.black.withValues(alpha: vignetteStrength)],
-              stops: const [0.35, 1.0],
-            ).createShader(Rect.fromLTWH(0, 0, w, h));
-          canvas.drawRect(Rect.fromLTWH(0, 0, w, h), vPaint);
-        }
-
-        img.dispose();
-        codec.dispose();
-        descriptor.dispose();
-
-        final picture = recorder.endRecording();
-        final rendered = await picture.toImage(w.round(), h.round());
-        final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
-        rendered.dispose();
-
-        final name = 'likethis_batch_${DateTime.now().millisecondsSinceEpoch}_$_processedCount.png';
-        final outFile = File('${dir.path}/$name');
-        await outFile.writeAsBytes(byteData!.buffer.asUint8List());
-        await PhotoManager.editor.saveImageWithPath(outFile.path, title: name);
+    for (int i = 0; i < images.length; i++) {
+      final file = await images[i].file;
+      if (file == null) {
         if (mounted) setState(() => _processedCount++);
-      } catch (_) {
-        // 개별 실패는 스킵 (진행 카운트 포함)
-        if (mounted) setState(() => _processedCount++);
+        continue;
       }
+
+      final outPath = await compute(_renderSingleImage, _RenderParams(
+        inputPath: file.path,
+        matrix: matrix,
+        vignetteStrength: vignetteStrength,
+        outDir: dir.path,
+        index: i,
+      ));
+
+      if (outPath != null) {
+        final name = outPath.split('/').last;
+        await PhotoManager.editor.saveImageWithPath(outPath, title: name);
+      }
+      if (mounted) setState(() => _processedCount++);
     }
 
     if (!mounted) return;
@@ -294,7 +334,19 @@ class _GalleryScreenState extends State<GalleryScreen> {
       behavior: SnackBarBehavior.floating,
     ));
 
-    _quietReload();
+    await _prependNewAssets(images.length);
+  }
+
+  Future<void> _prependNewAssets(int expectedCount) async {
+    if (_album == null || !mounted) return;
+    final albums = await PhotoManager.getAssetPathList(type: RequestType.common, onlyAll: true);
+    if (albums.isEmpty || !mounted) return;
+    _album = albums.first;
+    final fresh = await _album!.getAssetListPaged(page: 0, size: expectedCount + 5);
+    final existingIds = _assets.map((a) => a.id).toSet();
+    final newItems = fresh.where((a) => !existingIds.contains(a.id)).toList();
+    if (newItems.isEmpty || !mounted) return;
+    setState(() => _assets = [...newItems, ..._assets]);
   }
 
   Future<void> _shareSelected() async {
@@ -637,6 +689,7 @@ class _AssetThumbnail extends StatefulWidget {
 
 class _AssetThumbnailState extends State<_AssetThumbnail> {
   Uint8List? _bytes;
+  bool _isLoadingThumb = false;
 
   @override
   void initState() {
@@ -654,10 +707,13 @@ class _AssetThumbnailState extends State<_AssetThumbnail> {
   }
 
   Future<void> _loadThumbnail() async {
+    if (_isLoadingThumb) return;
+    _isLoadingThumb = true;
     final bytes = await widget.asset.thumbnailDataWithSize(
       const ThumbnailSize(180, 180),
       quality: 70,
     );
+    _isLoadingThumb = false;
     if (mounted) setState(() => _bytes = bytes);
   }
 
