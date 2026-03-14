@@ -55,9 +55,9 @@ class CameraEngine {
     await _channel.invokeMethod<void>('setFlash', {'mode': mode});
   }
 
-  /// 동영상 녹화 시작 → 임시 파일 경로 반환 (녹화 완료 시)
-  static Future<void> startRecording() async {
-    await _channel.invokeMethod<void>('startRecording');
+  /// 동영상 녹화 시작
+  static Future<void> startRecording({required bool shutterSound}) async {
+    await _channel.invokeMethod<void>('startRecording', {'shutterSound': shutterSound});
   }
 
   /// 동영상 녹화 중지 → 저장된 파일 경로 반환

@@ -14,6 +14,7 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private lateinit var context: Context
     private var session: MFCameraSession? = null
     private val bwParams = BWRenderParams()
+    private var lastShutterSoundEnabled = false
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -89,11 +90,19 @@ class CameraEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             }
 
             "startRecording" -> {
+                val playSound = call.argument<Boolean>("shutterSound") ?: false
+                if (playSound) {
+                    lastShutterSoundEnabled = true
+                    MediaActionSound().play(MediaActionSound.START_VIDEO_RECORDING)
+                } else {
+                    lastShutterSoundEnabled = false
+                }
                 session?.startRecording()
                 result.success(null)
             }
 
             "stopRecording" -> {
+                if (lastShutterSoundEnabled) MediaActionSound().play(MediaActionSound.STOP_VIDEO_RECORDING)
                 session?.stopRecording { path -> result.success(path) }
             }
 

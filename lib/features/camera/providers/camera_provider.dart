@@ -201,7 +201,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
     }
   }
 
-  Future<void> toggleRecording() async {
+  Future<void> toggleRecording({bool shutterSound = false}) async {
     if (state.isRecording) {
       state = state.copyWith(status: CameraStatus.capturing);
       try {
@@ -218,7 +218,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
       }
     } else {
       if (!state.isReady) return;
-      await CameraEngine.startRecording();
+      await CameraEngine.startRecording(shutterSound: shutterSound);
       state = state.copyWith(status: CameraStatus.recording);
     }
   }

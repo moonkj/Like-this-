@@ -741,8 +741,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     child: _isVideoMode
                         ? _VideoShutterButton(
                             isRecording: camState.isRecording,
-                            onTap: () =>
-                                ref.read(cameraProvider.notifier).toggleRecording(),
+                            onTap: () => ref.read(cameraProvider.notifier).toggleRecording(
+                                  shutterSound: ref.read(preferencesProvider).shutterSound,
+                                ),
                           )
                         : ShutterButton(
                             isCapturing:

@@ -55,8 +55,7 @@ final class LikeThisCamera: NSObject {
                 result(nil)
             case "capturePhoto":
                 let playSound = (call.arguments as? [String: Any])?["shutterSound"] as? Bool ?? false
-                if playSound { AudioServicesPlaySystemSound(1108) }
-                self.cameraSession?.capturePhoto { path in result(path) }
+                self.cameraSession?.capturePhoto(shutterSound: playSound) { path in result(path) }
             case "setExposure":
                 let ev = (call.arguments as? [String: Any])?["ev"] as? Double ?? 0.0
                 self.cameraSession?.setExposure(Float(ev))
@@ -74,7 +73,8 @@ final class LikeThisCamera: NSObject {
 
             // ── 동영상 녹화 ─────────────────────────────────────────────────
             case "startRecording":
-                self.cameraSession?.startRecording()
+                let recSound = (call.arguments as? [String: Any])?["shutterSound"] as? Bool ?? false
+                self.cameraSession?.startRecording(shutterSound: recSound)
                 result(nil)
             case "stopRecording":
                 self.cameraSession?.stopRecording { path in result(path) }

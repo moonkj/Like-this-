@@ -1,3 +1,4 @@
+import AudioToolbox
 import AVFoundation
 import Flutter
 import UIKit
@@ -27,6 +28,8 @@ final class MFCameraSession: NSObject {
     private var outputBufferPool: CVPixelBufferPool?
 
     private var photoCaptureCompletion: ((String?) -> Void)?
+    private var photoCapturePlaySound = false
+    private var recordingPlaySound    = false
     private let videoRecorder = MFVideoRecorder()
 
     init(bwEngine: MFBWEngine, registry: Any, frontCamera: Bool) {
@@ -113,8 +116,14 @@ final class MFCameraSession: NSObject {
         dev.unlockForConfiguration()
     }
 
-    func capturePhoto(completion: @escaping (String?) -> Void) {
+    func capturePhoto(shutterSound: Bool, completion: @escaping (String?) -> Void) {
         photoCaptureCompletion = completion
+        photoCapturePlaySound  = shutterSound
+        if !shutterSound {
+            // 시스템 자동 셔터음 억제: AVAudioSession 카테고리를 playback으로 전환
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
@@ -130,11 +139,14 @@ final class MFCameraSession: NSObject {
         dev.unlockForConfiguration()
     }
 
-    func startRecording() {
+    func startRecording(shutterSound: Bool) {
+        recordingPlaySound = shutterSound
+        if shutterSound { AudioServicesPlaySystemSound(1117) } // begin-recording
         videoRecorder.startRecording()
     }
 
     func stopRecording(completion: @escaping (String?) -> Void) {
+        if recordingPlaySound { AudioServicesPlaySystemSound(1118) } // end-recording
         videoRecorder.stopRecording(completion: completion)
     }
 
@@ -274,7 +286,14 @@ extension MFCameraSession: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput,
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
-        defer { photoCaptureCompletion = nil }
+        defer {
+            photoCaptureCompletion = nil
+            // 셔터음 억제를 위해 변경한 AudioSession 복구 (녹화용 playAndRecord)
+            if !photoCapturePlaySound {
+                try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .mixWithOthers])
+                try? AVAudioSession.sharedInstance().setActive(true)
+            }
+        }
         guard error == nil, let data = photo.fileDataRepresentation() else {
             photoCaptureCompletion?(nil); return
         }
