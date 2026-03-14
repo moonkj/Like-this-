@@ -9,7 +9,7 @@ class LikeThisApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
-      title: 'Like This',
+      title: 'Like This!',
       debugShowCheckedModeBanner: false,
       // Dark Mode Only
       theme: AppTheme.theme,

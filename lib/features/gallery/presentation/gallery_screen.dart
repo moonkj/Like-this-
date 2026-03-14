@@ -415,7 +415,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         ),
                       )
                     : const Text(
-                        'LIKE THIS',
+                        'LIKE THIS!',
                         style: TextStyle(
                           color: AppColors.silver,
                           fontSize: 13,

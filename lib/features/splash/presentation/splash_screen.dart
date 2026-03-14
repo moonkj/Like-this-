@@ -61,7 +61,7 @@ class _SplashScreenState extends State<SplashScreen>
               const SizedBox(height: 20),
               // 앱 이름
               const Text(
-                'LIKE THIS',
+                'LIKE THIS!',
                 style: TextStyle(
                   color: AppColors.white,
                   fontSize: 22,
