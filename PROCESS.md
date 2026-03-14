@@ -18,6 +18,9 @@
 | Sprint 4 | Polish & QA | 🔄 진행 중 |
 | Sprint 13 | 카메라 UI/UX 개선 (오디오/비교/제스처) | ✅ 완료 |
 | Sprint 14 | 에디터 크롭 & 카메라 센서 버그 수정 | ✅ 완료 |
+| Sprint 20 | 필터 강도 슬라이더 사용 중 사이드바 유지 | ✅ 완료 |
+| Sprint 21 | 갤러리 배치 처리 성능 개선 | ✅ 완료 |
+| Sprint 22 | 무음 셔터 설정 + 설정화면 개편 | ✅ 완료 |
 
 ---
 
@@ -686,6 +689,40 @@
   - 사이드바와 강도 패널이 동시에 사라지는 일관된 UX
 - [x] tune 버튼으로 intensity panel 수동 닫을 때 `_resetSideButtonTimer()` 호출
   - 패널 닫힌 후 사이드바가 독립적으로 5초 카운트다운 재개
+
+---
+
+## Sprint 22 — 무음 셔터 설정 + 설정화면 개편
+
+### ✅ 완료 (2026-03-14)
+
+#### Sprint 22-1: 무음 셔터 토글 (설정 → 카메라 → iOS 네이티브)
+- [x] `UserPreferences.shutterSound` 필드 추가 (`false` = 무음 기본값)
+- [x] `PreferencesNotifier.setShutterSound()` 추가
+- [x] `CameraEngine.capturePhoto(shutterSound:)` / `startRecording(shutterSound:)` 파라미터 추가
+- [x] `CameraNotifier.capturePhoto()` / `toggleRecording()` shutterSound 전달
+- [x] `CameraScreen` — `preferencesProvider`에서 shutterSound 읽어 호출
+- [x] iOS `CameraEnginePlugin.swift` — `capturePhoto` / `startRecording` 케이스 shutterSound 수신
+- [x] iOS `MFCameraSession.swift` — `capturePhoto(shutterSound:)` / `startRecording(shutterSound:)` 구현
+- [x] Android `CameraEnginePlugin.kt` — `MediaActionSound` 기반 셔터음 처리
+
+#### Sprint 22-2: 무음 셔터 버그 수정 — KR/JP 기기 OS 강제 셔터음 우회
+- **문제**: 한국 기기에서 `AVCapturePhotoOutput.capturePhoto()` 자체가 OS 레벨 셔터음 강제 발생
+- **원인 분석**: AVAudioSession 조작(`.playback` 카테고리)은 오히려 셔터음 활성화 역효과
+- **해결 (MoodFilm `captureSilentPhoto` 방식 채택)**:
+  - 무음 모드: `photoOutput.capturePhoto()` 완전 우회 → 현재 비디오 프레임(`latestRawInput`) 직접 JPEG 저장
+  - 유음 모드: `AudioServicesPlaySystemSound(1108)` + `photoOutput.capturePhoto()` (고해상도)
+- [x] `latestRawInput: CIImage?` 필드 추가 — 매 프레임 방향 보정 후 원본 보관
+- [x] `captureSilentPhoto(completion:)` private 메서드 추가
+- [x] `capturePhoto(shutterSound:)` — shutterSound false 시 `captureSilentPhoto()` 분기
+
+#### Sprint 22-3: 설정화면 개편 (Like it 앱 구조 반영)
+- [x] 카메라 섹션 → "무음 셔터" 단일 항목으로 정리 (갤러리 자동 저장 / 햅틱 / 통계 제거)
+- [x] "앱 정보" 섹션 추가: 버전 / 개인정보처리방침 / 이용약관 / 문의하기
+- [x] `_SettingsItem` — `subtitle`, `onTap` 파라미터 추가, 아이템 간 `Divider` 추가
+- [x] `policy_screen.dart` 신규 생성 — 개인정보처리방침 / 이용약관 인앱 표시
+- [x] 문의하기 — `url_launcher` `mailto:` 링크로 기본 메일 앱 호출
+- [x] `url_launcher ^6.3.1` 의존성 추가
 
 ---
 

@@ -23,19 +23,20 @@ final class MFCameraSession: NSObject {
     // 처리된 CIImage (sessionQueue 생산 / Flutter texture 소비)
     private let imageLock = NSLock()
     private var latestProcessedImage: CIImage?
+    // 무음 셔터용 원본 입력 프레임 (방향 보정만 적용, 필터 미적용)
+    private var latestRawInput: CIImage?
 
     // 출력 CVPixelBuffer 풀
     private var outputBufferPool: CVPixelBufferPool?
 
     private var photoCaptureCompletion: ((String?) -> Void)?
-    private var photoCapturePlaySound = false
-    private var recordingPlaySound    = false
+    private var recordingPlaySound = false
     private let videoRecorder = MFVideoRecorder()
 
     init(bwEngine: MFBWEngine, registry: Any, frontCamera: Bool) {
-        self.bwEngine       = bwEngine
+        self.bwEngine        = bwEngine
         self.textureRegistry = registry as! FlutterTextureRegistry
-        self.isFront        = frontCamera
+        self.isFront         = frontCamera
         super.init()
     }
 
@@ -95,6 +96,7 @@ final class MFCameraSession: NSObject {
             self.outputBufferPool = nil
             self.imageLock.lock()
             self.latestProcessedImage = nil
+            self.latestRawInput = nil
             self.imageLock.unlock()
         }
     }
@@ -117,15 +119,61 @@ final class MFCameraSession: NSObject {
     }
 
     func capturePhoto(shutterSound: Bool, completion: @escaping (String?) -> Void) {
-        photoCaptureCompletion = completion
-        photoCapturePlaySound  = shutterSound
         if !shutterSound {
-            // 시스템 자동 셔터음 억제: AVAudioSession 카테고리를 playback으로 전환
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try? AVAudioSession.sharedInstance().setActive(true)
+            // 무음 모드: AVCapturePhotoOutput 완전히 우회 → 현재 비디오 프레임 직접 저장
+            // (KR/JP 기기에서 photoOutput.capturePhoto() 자체가 OS 레벨 셔터음 발생)
+            captureSilentPhoto(completion: completion)
+            return
         }
+        // 유음 모드: 시스템 셔터음 + AVCapturePhotoOutput (고해상도)
+        AudioServicesPlaySystemSound(1108)
+        photoCaptureCompletion = completion
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+
+    // MARK: - Silent Photo (비디오 프레임 직접 저장)
+
+    private func captureSilentPhoto(completion: @escaping (String?) -> Void) {
+        imageLock.lock()
+        let rawInput = latestRawInput
+        imageLock.unlock()
+        guard let input = rawInput else { completion(nil); return }
+
+        sessionQueue.async { [weak self] in
+            guard let self = self else { completion(nil); return }
+
+            var captured = self.bwEngine.buildImageForCapture(from: input)
+            // 3:4 비율로 center-crop
+            let ext = captured.extent
+            if ext.height > ext.width {
+                let targetH = (ext.width * 4.0 / 3.0).rounded()
+                let yOff    = ((ext.height - targetH) / 2.0).rounded()
+                captured = captured.cropped(to: CGRect(
+                    x: ext.origin.x, y: ext.origin.y + yOff,
+                    width: ext.width, height: targetH
+                ))
+            }
+            // origin 정규화
+            let o = captured.extent.origin
+            if o.x != 0 || o.y != 0 {
+                captured = captured.transformed(by: CGAffineTransform(translationX: -o.x, y: -o.y))
+            }
+            guard let cgImage = self.bwEngine.context.createCGImage(captured, from: captured.extent) else {
+                completion(nil); return
+            }
+            guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.95) else {
+                completion(nil); return
+            }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString + ".jpg")
+            do {
+                try jpegData.write(to: url)
+                completion(url.path)
+            } catch {
+                completion(nil)
+            }
+        }
     }
 
     func setFlash(mode: String) {
@@ -253,6 +301,7 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptu
         let processed = bwEngine.buildImage(from: inputImage)
         imageLock.lock()
         latestProcessedImage = processed
+        latestRawInput = inputImage   // 무음 셔터용 원본 보관
         imageLock.unlock()
         if registeredTextureId >= 0 {
             textureRegistry.textureFrameAvailable(registeredTextureId)
@@ -280,33 +329,25 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptu
     }
 }
 
-// MARK: - AVCapturePhotoCaptureDelegate
+// MARK: - AVCapturePhotoCaptureDelegate (유음 모드 전용)
 
 extension MFCameraSession: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput,
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
-        defer {
-            photoCaptureCompletion = nil
-            // 셔터음 억제를 위해 변경한 AudioSession 복구 (녹화용 playAndRecord)
-            if !photoCapturePlaySound {
-                try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .mixWithOthers])
-                try? AVAudioSession.sharedInstance().setActive(true)
-            }
-        }
+        defer { photoCaptureCompletion = nil }
         guard error == nil, let data = photo.fileDataRepresentation() else {
             photoCaptureCompletion?(nil); return
         }
 
         // JPEG → CIImage. 비디오 스트림과 동일: 픽셀 크기로만 회전 여부 판단
-        // (metadata orientation은 신뢰도가 낮음 — 이미 portrait인 경우 오회전 발생)
         var ciInput = CIImage(data: data) ?? CIImage.empty()
         if ciInput.extent.width > ciInput.extent.height {
-            ciInput = ciInput.oriented(.right)   // landscape 센서 데이터만 회전
+            ciInput = ciInput.oriented(.right)
         }
 
         var processed = bwEngine.buildImageForCapture(from: ciInput)
-        // 3:4 비율로 center-crop (사진: 1080×1920 → 1080×1440)
+        // 3:4 비율로 center-crop
         let pExt = processed.extent
         if pExt.height > pExt.width {
             let targetH = (pExt.width * 4.0 / 3.0).rounded()

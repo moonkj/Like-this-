@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_typography.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/services/preferences_service.dart';
+import 'policy_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -20,7 +22,7 @@ class SettingsScreen extends ConsumerWidget {
         backgroundColor: AppColors.background,
         leading: GestureDetector(
           onTap: () => context.pop(),
-          child: const Icon(Icons.close, color: AppColors.textPrimary),
+          child: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
         ),
         title: const Text('설정', style: AppTypography.h2),
         centerTitle: true,
@@ -32,32 +34,14 @@ class SettingsScreen extends ConsumerWidget {
             title: '카메라',
             items: [
               _SettingsItem(
-                icon: Icons.save_alt_outlined,
-                label: '갤러리 자동 저장',
+                icon: Icons.volume_off_outlined,
+                label: '무음 셔터',
+                subtitle: '촬영음 없이 사진 찍기',
                 trailing: Switch(
-                  value: prefs.saveToGallery,
-                  onChanged: (v) => notifier.setSaveToGallery(v),
-                  activeColor: AppColors.silver,
-                  inactiveTrackColor: AppColors.border,
-                ),
-              ),
-              _SettingsItem(
-                icon: Icons.vibration,
-                label: '햅틱 피드백',
-                trailing: Switch(
-                  value: prefs.hapticEnabled,
-                  onChanged: (v) => notifier.setHapticEnabled(v),
-                  activeColor: AppColors.silver,
-                  inactiveTrackColor: AppColors.border,
-                ),
-              ),
-              _SettingsItem(
-                icon: Icons.volume_up_outlined,
-                label: '셔터음',
-                trailing: Switch(
-                  value: prefs.shutterSound,
-                  onChanged: (v) => notifier.setShutterSound(v),
-                  activeColor: AppColors.silver,
+                  // 무음 셔터 ON = shutterSound false (소리 안 냄)
+                  value: !prefs.shutterSound,
+                  onChanged: (v) => notifier.setShutterSound(!v),
+                  activeThumbColor: AppColors.silver,
                   inactiveTrackColor: AppColors.border,
                 ),
               ),
@@ -65,26 +49,39 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppDimensions.spaceL),
           _SettingsSection(
-            title: '통계',
+            title: '앱 정보',
             items: [
-              _SettingsItem(
-                icon: Icons.photo_camera_outlined,
-                label: '총 촬영 수',
-                trailing: Text(
-                  '${prefs.totalPhotosCaptured}장',
-                  style: AppTypography.bodySmall,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spaceL),
-          _SettingsSection(
-            title: '정보',
-            items: [
-              _SettingsItem(
+              const _SettingsItem(
                 icon: Icons.info_outline,
                 label: '버전',
-                trailing: const Text('1.0.0', style: AppTypography.bodySmall),
+                trailing: Text('1.0.0', style: AppTypography.bodySmall),
+              ),
+              _SettingsItem(
+                icon: Icons.privacy_tip_outlined,
+                label: '개인정보처리방침',
+                trailing: const Icon(Icons.chevron_right, color: AppColors.silver, size: 20),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => PolicyScreen.privacyPolicy),
+                ),
+              ),
+              _SettingsItem(
+                icon: Icons.description_outlined,
+                label: '이용약관',
+                trailing: const Icon(Icons.chevron_right, color: AppColors.silver, size: 20),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => PolicyScreen.termsOfService),
+                ),
+              ),
+              _SettingsItem(
+                icon: Icons.mail_outline,
+                label: '문의하기',
+                trailing: const Icon(Icons.chevron_right, color: AppColors.silver, size: 20),
+                onTap: () => launchUrl(
+                  Uri.parse('mailto:imurmkj@gmail.com?subject=Like This! 문의'),
+                  mode: LaunchMode.externalApplication,
+                ),
               ),
             ],
           ),
@@ -109,7 +106,7 @@ class _SettingsSection extends StatelessWidget {
             left: AppDimensions.spaceS,
             bottom: AppDimensions.spaceS,
           ),
-          child: Text(title.toUpperCase(), style: AppTypography.caption),
+          child: Text(title, style: AppTypography.caption),
         ),
         Container(
           decoration: BoxDecoration(
@@ -117,7 +114,15 @@ class _SettingsSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppDimensions.radiusM),
             border: Border.all(color: AppColors.border),
           ),
-          child: Column(children: items),
+          child: Column(
+            children: [
+              for (int i = 0; i < items.length; i++) ...[
+                items[i],
+                if (i < items.length - 1)
+                  const Divider(height: 1, indent: 48, color: AppColors.border),
+              ],
+            ],
+          ),
         ),
       ],
     );
@@ -129,25 +134,44 @@ class _SettingsItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.trailing,
+    this.subtitle,
+    this.onTap,
   });
   final IconData icon;
   final String label;
+  final String? subtitle;
   final Widget trailing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimensions.spaceM,
-        vertical: AppDimensions.spaceM,
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.silver, size: AppDimensions.iconSize),
-          const SizedBox(width: AppDimensions.spaceM),
-          Expanded(child: Text(label, style: AppTypography.body)),
-          trailing,
-        ],
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.spaceM,
+          vertical: AppDimensions.spaceM,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.silver, size: AppDimensions.iconSize),
+            const SizedBox(width: AppDimensions.spaceM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppTypography.body),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle!, style: AppTypography.caption),
+                  ],
+                ],
+              ),
+            ),
+            trailing,
+          ],
+        ),
       ),
     );
   }
