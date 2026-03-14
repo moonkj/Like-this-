@@ -326,94 +326,123 @@ final class LikeThisCamera: NSObject {
                 try? FileManager.default.removeItem(at: outURL)
 
                 let asset = AVURLAsset(url: srcURL)
-                guard let exportSession = AVAssetExportSession(
-                    asset: asset, presetName: AVAssetExportPresetHighestQuality)
-                else {
-                    result(FlutterError(code: "EXPORT_FAILED", message: "Cannot create export session", details: nil))
-                    return
-                }
 
-                // 프레임별 CIFilter 적용 — GPU-backed CIContext 사용
-                let ciCtx = CIContext(options: [.useSoftwareRenderer: false])
-                let composition = AVVideoComposition(asset: asset) { request in
-                    // extent를 고정 기준으로 사용 — clampedToExtent() 대신 cropped(to:)로 항상 동일 범위 유지
-                    let extent = request.sourceImage.extent
-                    var ci = request.sourceImage
-
-                    // Color matrix (Flutter 4×5 행렬, bias /255)
-                    if let f = CIFilter(name: "CIColorMatrix") {
-                        f.setValue(ci, forKey: kCIInputImageKey)
-                        f.setValue(CIVector(x: m[0],  y: m[1],  z: m[2],  w: m[3]),  forKey: "inputRVector")
-                        f.setValue(CIVector(x: m[5],  y: m[6],  z: m[7],  w: m[8]),  forKey: "inputGVector")
-                        f.setValue(CIVector(x: m[10], y: m[11], z: m[12], w: m[13]), forKey: "inputBVector")
-                        f.setValue(CIVector(x: m[15], y: m[16], z: m[17], w: m[18]), forKey: "inputAVector")
-                        f.setValue(CIVector(x: m[4]/255, y: m[9]/255, z: m[14]/255, w: m[19]/255), forKey: "inputBiasVector")
-                        if let out = f.outputImage { ci = out.cropped(to: extent) }
-                    }
-                    // Vignette
-                    if vigIntensity > 0.01, let f = CIFilter(name: "CIVignette") {
-                        f.setValue(ci, forKey: kCIInputImageKey)
-                        f.setValue(Double(vigIntensity) * 2.5, forKey: kCIInputIntensityKey)
-                        f.setValue(1.5, forKey: kCIInputRadiusKey)
-                        if let out = f.outputImage { ci = out.cropped(to: extent) }
-                    }
-                    // Grain
-                    if grainIntensity > 0.01,
-                       let noise = CIFilter(name: "CIRandomGenerator")?.outputImage,
-                       let mono = CIFilter(name: "CIColorMatrix") {
-                        let croppedNoise = noise.cropped(to: extent)
-                        let n = CGFloat(grainIntensity) * 0.18
-                        mono.setValue(croppedNoise, forKey: kCIInputImageKey)
-                        mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                        mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputGVector")
-                        mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputBVector")
-                        mono.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputAVector")
-                        if let grainImg = mono.outputImage?.cropped(to: extent),
-                           let blend = CIFilter(name: "CISoftLightBlendMode") {
-                            blend.setValue(grainImg, forKey: kCIInputImageKey)
-                            blend.setValue(ci,       forKey: kCIInputBackgroundImageKey)
-                            if let out = blend.outputImage { ci = out.cropped(to: extent) }
+                // 백그라운드에서 트랙 동기 로드 후 composition 생성 → renderSize 정확성 보장
+                DispatchQueue.global(qos: .userInitiated).async {
+                    guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+                        DispatchQueue.main.async {
+                            result(FlutterError(code: "NO_TRACK", message: "No video track", details: nil))
                         }
+                        return
                     }
-                    // LightLeak
-                    if lightLeakIntensity > 0.01,
-                       let radial = CIFilter(name: "CIRadialGradient") {
-                        radial.setValue(CIVector(x: extent.minX, y: extent.maxY), forKey: "inputCenter")
-                        radial.setValue(extent.width * 0.5, forKey: "inputRadius0")
-                        radial.setValue(extent.width * 1.2, forKey: "inputRadius1")
-                        radial.setValue(CIColor(red: 1.0, green: 0.6, blue: 0.2,
-                                                alpha: CGFloat(lightLeakIntensity) * 0.65), forKey: "inputColor0")
-                        radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor1")
-                        if let leakImg = radial.outputImage?.cropped(to: extent),
-                           let blend = CIFilter(name: "CIScreenBlendMode") {
-                            blend.setValue(leakImg, forKey: kCIInputImageKey)
-                            blend.setValue(ci,      forKey: kCIInputBackgroundImageKey)
-                            if let out = blend.outputImage { ci = out.cropped(to: extent) }
-                        }
-                    }
-                    // Bloom
-                    if bloomIntensity > 0.01, let f = CIFilter(name: "CIBloom") {
-                        f.setValue(ci, forKey: kCIInputImageKey)
-                        f.setValue(22.0, forKey: kCIInputRadiusKey)
-                        f.setValue(Double(bloomIntensity) * 2.0, forKey: kCIInputIntensityKey)
-                        if let out = f.outputImage { ci = out.cropped(to: extent) }
-                    }
-                    request.finish(with: ci, context: ciCtx)
-                }
 
-                exportSession.outputURL        = outURL
-                exportSession.outputFileType   = .mp4
-                exportSession.videoComposition = composition
-                exportSession.exportAsynchronously {
-                    DispatchQueue.main.async {
-                        if exportSession.status == .completed {
-                            result(outputPath)
-                        } else {
-                            result(FlutterError(
-                                code: "EXPORT_FAILED",
-                                message: exportSession.error?.localizedDescription ?? "Export failed",
-                                details: nil
+                    // track 기반 renderSize 계산 (preferredTransform 반영)
+                    let naturalSize = videoTrack.naturalSize
+                    let transform   = videoTrack.preferredTransform
+                    let tRect       = CGRect(origin: .zero, size: naturalSize).applying(transform)
+                    // tRect가 유효하면 transform 반영, 그렇지 않으면 naturalSize 그대로 사용
+                    let renderW = abs(tRect.width)  > 1 ? abs(tRect.width).rounded()  : naturalSize.width
+                    let renderH = abs(tRect.height) > 1 ? abs(tRect.height).rounded() : naturalSize.height
+
+                    guard let exportSession = AVAssetExportSession(
+                        asset: asset, presetName: AVAssetExportPresetHighestQuality)
+                    else {
+                        DispatchQueue.main.async {
+                            result(FlutterError(code: "EXPORT_FAILED", message: "Cannot create export session", details: nil))
+                        }
+                        return
+                    }
+
+                    // 프레임별 CIFilter 적용 — GPU-backed CIContext 사용
+                    let ciCtx = CIContext(options: [.useSoftwareRenderer: false])
+                    let composition = AVVideoComposition(asset: asset) { request in
+                        // renderSize 기준으로 extent 정규화 (원점 비표준 방지)
+                        let srcExtent = request.sourceImage.extent
+                        let extent    = CGRect(origin: .zero, size: CGSize(width: renderW, height: renderH))
+                        var ci = request.sourceImage
+                        // 원점이 (0,0)이 아닐 경우 translate하여 정규화
+                        if srcExtent.origin != .zero {
+                            ci = ci.transformed(by: CGAffineTransform(
+                                translationX: -srcExtent.origin.x,
+                                y: -srcExtent.origin.y
                             ))
+                        }
+
+                        // Color matrix (Flutter 4×5 행렬, bias /255)
+                        if let f = CIFilter(name: "CIColorMatrix") {
+                            f.setValue(ci, forKey: kCIInputImageKey)
+                            f.setValue(CIVector(x: m[0],  y: m[1],  z: m[2],  w: m[3]),  forKey: "inputRVector")
+                            f.setValue(CIVector(x: m[5],  y: m[6],  z: m[7],  w: m[8]),  forKey: "inputGVector")
+                            f.setValue(CIVector(x: m[10], y: m[11], z: m[12], w: m[13]), forKey: "inputBVector")
+                            f.setValue(CIVector(x: m[15], y: m[16], z: m[17], w: m[18]), forKey: "inputAVector")
+                            f.setValue(CIVector(x: m[4]/255, y: m[9]/255, z: m[14]/255, w: m[19]/255), forKey: "inputBiasVector")
+                            if let out = f.outputImage { ci = out.cropped(to: extent) }
+                        }
+                        // Vignette
+                        if vigIntensity > 0.01, let f = CIFilter(name: "CIVignette") {
+                            f.setValue(ci, forKey: kCIInputImageKey)
+                            f.setValue(Double(vigIntensity) * 2.5, forKey: kCIInputIntensityKey)
+                            f.setValue(1.5, forKey: kCIInputRadiusKey)
+                            if let out = f.outputImage { ci = out.cropped(to: extent) }
+                        }
+                        // Grain
+                        if grainIntensity > 0.01,
+                           let noise = CIFilter(name: "CIRandomGenerator")?.outputImage,
+                           let mono = CIFilter(name: "CIColorMatrix") {
+                            let croppedNoise = noise.cropped(to: extent)
+                            let n = CGFloat(grainIntensity) * 0.18
+                            mono.setValue(croppedNoise, forKey: kCIInputImageKey)
+                            mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputRVector")
+                            mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputGVector")
+                            mono.setValue(CIVector(x: n, y: 0, z: 0, w: 0), forKey: "inputBVector")
+                            mono.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputAVector")
+                            if let grainImg = mono.outputImage?.cropped(to: extent),
+                               let blend = CIFilter(name: "CISoftLightBlendMode") {
+                                blend.setValue(grainImg, forKey: kCIInputImageKey)
+                                blend.setValue(ci,       forKey: kCIInputBackgroundImageKey)
+                                if let out = blend.outputImage { ci = out.cropped(to: extent) }
+                            }
+                        }
+                        // LightLeak
+                        if lightLeakIntensity > 0.01,
+                           let radial = CIFilter(name: "CIRadialGradient") {
+                            radial.setValue(CIVector(x: extent.minX, y: extent.maxY), forKey: "inputCenter")
+                            radial.setValue(extent.width * 0.5, forKey: "inputRadius0")
+                            radial.setValue(extent.width * 1.2, forKey: "inputRadius1")
+                            radial.setValue(CIColor(red: 1.0, green: 0.6, blue: 0.2,
+                                                    alpha: CGFloat(lightLeakIntensity) * 0.65), forKey: "inputColor0")
+                            radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor1")
+                            if let leakImg = radial.outputImage?.cropped(to: extent),
+                               let blend = CIFilter(name: "CIScreenBlendMode") {
+                                blend.setValue(leakImg, forKey: kCIInputImageKey)
+                                blend.setValue(ci,      forKey: kCIInputBackgroundImageKey)
+                                if let out = blend.outputImage { ci = out.cropped(to: extent) }
+                            }
+                        }
+                        // Bloom
+                        if bloomIntensity > 0.01, let f = CIFilter(name: "CIBloom") {
+                            f.setValue(ci, forKey: kCIInputImageKey)
+                            f.setValue(22.0, forKey: kCIInputRadiusKey)
+                            f.setValue(Double(bloomIntensity) * 2.0, forKey: kCIInputIntensityKey)
+                            if let out = f.outputImage { ci = out.cropped(to: extent) }
+                        }
+                        request.finish(with: ci, context: ciCtx)
+                    }
+
+                    exportSession.outputURL        = outURL
+                    exportSession.outputFileType   = .mp4
+                    exportSession.videoComposition = composition
+                    exportSession.exportAsynchronously {
+                        DispatchQueue.main.async {
+                            if exportSession.status == .completed {
+                                result(outputPath)
+                            } else {
+                                result(FlutterError(
+                                    code: "EXPORT_FAILED",
+                                    message: exportSession.error?.localizedDescription ?? "Export failed",
+                                    details: nil
+                                ))
+                            }
                         }
                     }
                 }

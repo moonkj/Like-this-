@@ -258,6 +258,11 @@ extension MFCameraSession: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptu
                     width: ext.width, height: targetH
                 ))
             }
+            // origin을 (0,0)으로 정규화 — 픽셀버퍼 렌더링 오프셋 방지
+            let o = captureFrame.extent.origin
+            if o.x != 0 || o.y != 0 {
+                captureFrame = captureFrame.transformed(by: CGAffineTransform(translationX: -o.x, y: -o.y))
+            }
             videoRecorder.appendVideo(ciImage: captureFrame, context: bwEngine.context, at: pts)
         }
     }

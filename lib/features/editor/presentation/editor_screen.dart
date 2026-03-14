@@ -59,9 +59,8 @@ class _EditorScreenState extends State<EditorScreen> {
   ui.Image? _decodedImage;
   Size?     _imageSize;
 
-  // 비교 모드
-  bool _isComparing   = false;
-  bool _isSaving      = false;
+  bool _isSaving         = false;
+  bool _isPhotoSwitching = false;
 
   // 스와이프 탐색
   late String _currentPath;
@@ -456,13 +455,6 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ],
           const Spacer(),
-          // 비교
-          _CircleBtn(
-            icon: Icons.compare_rounded,
-            active: _isComparing,
-            onTap: () { HapticFeedback.selectionClick(); setState(() => _isComparing = !_isComparing); },
-          ),
-          const SizedBox(width: 8),
           // 삭제
           if (_currentAssetId != null) ...[
             _CircleBtn(icon: Icons.delete_outline_rounded,
@@ -502,14 +494,14 @@ class _EditorScreenState extends State<EditorScreen> {
       return Expanded(child: photoWidget);
     }
 
-    // 스와이프 탐색: 필터 탭에서만 활성 (효과 탭은 슬라이더 제스처 충돌 방지, 크롭·비교 모드도 비활성)
-    final canSwipe = _tab == 0 && !_isComparing;
+    // 스와이프 탐색: 크롭 탭(2)은 드래그 제스처 충돌로 비활성
+    final canSwipe = _tab != 2;
 
     return Expanded(
       child: PageView.builder(
         controller: _pageCtrl,
         physics: canSwipe
-            ? const PageScrollPhysics()
+            ? const BouncingScrollPhysics(parent: PageScrollPhysics())
             : const NeverScrollableScrollPhysics(),
         itemCount: list.length,
         scrollBehavior: const _NoThumbScrollBehavior(),
@@ -521,6 +513,7 @@ class _EditorScreenState extends State<EditorScreen> {
           // 이전 비디오 컨트롤러 정리
           final oldCtrl = _videoCtrl;
           setState(() {
+            _isPhotoSwitching  = true;
             _currentIndex      = i;
             _currentPath       = file.path;
             _currentAssetId    = asset.id;
@@ -536,6 +529,7 @@ class _EditorScreenState extends State<EditorScreen> {
           } else {
             await _loadImage(file.path);
           }
+          if (mounted) setState(() => _isPhotoSwitching = false);
         },
         itemBuilder: (ctx, i) {
           // 현재 페이지만 실제 콘텐츠, 나머지는 placeholder
@@ -555,22 +549,11 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildPhotoContent() {
-    // ── 비교 모드 (이미지·비디오 공통) ──────────────────────────────────────
-    // 비디오는 컨트롤러 초기화 완료 후에만 비교 모드 진입
-    if (_isComparing && (!_isVideo || (_videoCtrl?.value.isInitialized == true))) {
-      final filterName = _selectedFilterId == null
-          ? '현재'
-          : BWFilters.all.firstWhere((f) => f.id == _selectedFilterId,
-              orElse: () => BWFilters.all.first).name;
-      return _CompareOverlay(
-        imagePath: _currentPath,
-        colorFilter: _buildFilter(),
-        vignetteIntensity: _vignette / 100,
-        grainIntensity: _grain / 100,
-        videoController: _isVideo ? _videoCtrl : null,
-        afterLabel: filterName,
-      );
+    // ── 사진 전환 중: 이전 이미지 노출 방지 ─────────────────────────────────
+    if (_isPhotoSwitching) {
+      return const ColoredBox(color: Colors.black);
     }
+
 
     // ── 비디오 ──────────────────────────────────────────────────────────────
     if (_isVideo) {
@@ -985,124 +968,6 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 }
 
-// ── 비교 오버레이 (Before/After split) ────────────────────────────────────────
-
-class _CompareOverlay extends StatefulWidget {
-  const _CompareOverlay({
-    required this.imagePath,
-    required this.colorFilter,
-    required this.vignetteIntensity,
-    required this.grainIntensity,
-    this.videoController,
-    this.afterLabel = '현재',
-  });
-  final String imagePath;
-  final ColorFilter colorFilter;
-  final double vignetteIntensity;
-  final double grainIntensity;
-  final VideoPlayerController? videoController;
-  final String afterLabel;
-
-  @override
-  State<_CompareOverlay> createState() => _CompareOverlayState();
-}
-
-class _CompareOverlayState extends State<_CompareOverlay> {
-  double _splitX = 0.5;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (ctx, constraints) {
-      final w = constraints.maxWidth;
-      final h = constraints.maxHeight;
-      final splitPx = w * _splitX;
-
-      return GestureDetector(
-        onHorizontalDragUpdate: (d) {
-          setState(() => _splitX = (_splitX + d.delta.dx / w).clamp(0.05, 0.95));
-        },
-        child: Stack(clipBehavior: Clip.none, children: [
-          // Before: 원본 (전체, 동일 크기/정렬)
-          Positioned.fill(
-            child: widget.videoController != null
-                ? FittedBox(
-                    fit: BoxFit.contain,
-                    child: SizedBox(
-                      width: widget.videoController!.value.size.width,
-                      height: widget.videoController!.value.size.height,
-                      child: VideoPlayer(widget.videoController!),
-                    ),
-                  )
-                : Image.file(File(widget.imagePath),
-                    fit: BoxFit.contain, gaplessPlayback: true),
-          ),
-          // After: 필터 적용, CustomClipper로 오른쪽만 노출
-          Positioned.fill(
-            child: ClipRect(
-              clipper: _SplitClipper(_splitX),
-              child: ColorFiltered(
-                colorFilter: widget.colorFilter,
-                child: widget.videoController != null
-                    ? FittedBox(
-                        fit: BoxFit.contain,
-                        child: SizedBox(
-                          width: widget.videoController!.value.size.width,
-                          height: widget.videoController!.value.size.height,
-                          child: VideoPlayer(widget.videoController!),
-                        ),
-                      )
-                    : Image.file(File(widget.imagePath),
-                        fit: BoxFit.contain, gaplessPlayback: true),
-              ),
-            ),
-          ),
-          // 분할선
-          Positioned(left: splitPx - 1, top: 0, width: 2, height: h,
-            child: Container(color: Colors.white.withValues(alpha: 0.9))),
-          // 핸들
-          Positioned(
-            left: splitPx - 14, top: h / 2 - 14,
-            child: Container(
-              width: 28, height: 28,
-              decoration: const BoxDecoration(
-                  color: Colors.white, shape: BoxShape.circle),
-              child: const Icon(Icons.compare_arrows_rounded,
-                  color: Colors.black54, size: 16),
-            ),
-          ),
-          // Before 레이블 (핸들 왼쪽)
-          Positioned(
-            left: splitPx - 14 - 8 - 56,
-            top: h / 2 - 13,
-            child: _SplitLabel(text: '원본')),
-          // After 레이블 (핸들 오른쪽)
-          Positioned(
-            left: splitPx + 14 + 8,
-            top: h / 2 - 13,
-            child: _SplitLabel(text: widget.afterLabel)),
-        ]),
-      );
-    });
-  }
-}
-
-class _SplitLabel extends StatelessWidget {
-  const _SplitLabel({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.35),
-      borderRadius: BorderRadius.circular(100),
-    ),
-    child: Text(text,
-        style: const TextStyle(color: Colors.white,
-            fontSize: 12, fontWeight: FontWeight.w500)),
-  );
-}
-
 // ── 상단 원형 버튼 ────────────────────────────────────────────────────────────
 
 class _CircleBtn extends StatelessWidget {
@@ -1245,12 +1110,14 @@ class _FilterItem extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           SizedBox(
-            width: 58,
+            width: 64,
             child: Text(label,
-                maxLines: 2, textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   color: selected ? AppColors.textPrimary : AppColors.textSecondary,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 )),
           ),
@@ -1618,22 +1485,6 @@ class _CroppedImagePainter extends CustomPainter {
   @override
   bool shouldRepaint(_CroppedImagePainter old) =>
       old.image != image || old.srcRect != srcRect || old.colorFilter != colorFilter;
-}
-
-// ── 비교 오버레이용 클리퍼 ─────────────────────────────────────────────────────
-
-class _SplitClipper extends CustomClipper<Rect> {
-  const _SplitClipper(this.splitX);
-  final double splitX;
-
-  @override
-  Rect getClip(Size size) => Rect.fromLTWH(
-    size.width * splitX, 0,
-    size.width * (1 - splitX), size.height,
-  );
-
-  @override
-  bool shouldReclip(_SplitClipper old) => old.splitX != splitX;
 }
 
 // ── 스크롤 오버스크롤 효과 제거 (PageView 전용) ────────────────────────────────

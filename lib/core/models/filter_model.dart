@@ -82,8 +82,8 @@ abstract final class BWFilters {
     lutFileName: 'bw_pure.cube',
     description: '가장 화사하고 깨끗한 흑백',
     defaultIntensity: 1.0,
-    defaultGrain: 0.0,
-    defaultVignette: 0.0,
+    defaultGrain: 0.0,       // 노이즈 없이 순수하게
+    defaultVignette: 0.0,    // 주변부 어둠 없음
     enabledEffects: [],
     fallbackColor: Color(0xFF2A2A2A),
   );
@@ -93,9 +93,9 @@ abstract final class BWFilters {
     name: 'Deep Noir',
     lutFileName: 'bw_noir.cube',
     description: '강렬한 대비의 느와르 감성',
-    defaultIntensity: 0.9,
-    defaultGrain: 25.0,
-    defaultVignette: 30.0,
+    defaultIntensity: 1.0,   // 풀 강도로 블랙 극대화
+    defaultGrain: 38.0,      // 필름 분위기 살리는 입자감
+    defaultVignette: 48.0,   // 강한 주변부 어둠 — 느와르 핵심
     enabledEffects: [BWEffectType.vignette],
     fallbackColor: Color(0xFF0D0D0D),
   );
@@ -105,21 +105,21 @@ abstract final class BWFilters {
     name: 'Soft Grey',
     lutFileName: 'bw_soft.cube',
     description: '연필 소묘 같은 부드러움',
-    defaultIntensity: 0.85,
-    defaultGrain: 15.0,
-    defaultVignette: 5.0,
+    defaultIntensity: 0.88,  // 살짝 눌러서 부드러운 계조
+    defaultGrain: 6.0,       // 거의 없는 수준 — 에어리한 느낌
+    defaultVignette: 6.0,    // 아주 은은한 테두리
     enabledEffects: [],
     fallbackColor: Color(0xFF3A3A3A),
   );
 
   static const FilterModel bw2k = FilterModel(
     id: 'bw_2k',
-    name: '2000s BY2K',
+    name: 'BY2K',
     lutFileName: 'bw_2k.cube',
     description: '2000년대 디카 흑백 모드',
     defaultIntensity: 0.85,
-    defaultGrain: 35.0,
-    defaultVignette: 20.0,
+    defaultGrain: 45.0,      // 디지털 노이즈 느낌의 굵은 입자
+    defaultVignette: 22.0,   // 저가형 렌즈 주변부 열화
     enabledEffects: [BWEffectType.grain],
     fallbackColor: Color(0xFF252525),
   );
@@ -129,10 +129,10 @@ abstract final class BWFilters {
     name: 'Film Dust',
     lutFileName: 'bw_dust.cube',
     description: '먼지와 입자가 섞인 빈티지',
-    defaultIntensity: 0.8,
-    defaultGrain: 50.0,
-    defaultVignette: 25.0,
-    defaultDust: 40.0,
+    defaultIntensity: 0.82,
+    defaultGrain: 60.0,      // 빈티지 필름의 heavy grain
+    defaultVignette: 30.0,   // 오래된 렌즈 느낌
+    defaultDust: 55.0,       // 먼지 텍스처 — 이 필터의 핵심
     enabledEffects: [BWEffectType.grain, BWEffectType.dust],
     fallbackColor: Color(0xFF1E1E1E),
   );
@@ -142,10 +142,10 @@ abstract final class BWFilters {
     name: 'Silver Glow',
     lutFileName: 'bw_glow.cube',
     description: '금속성 광택이 도는 물광',
-    defaultIntensity: 0.8,
-    defaultGrain: 8.0,
-    defaultVignette: 10.0,
-    defaultBloom: 30.0,
+    defaultIntensity: 0.88,
+    defaultGrain: 3.0,       // 글로우 효과가 돋보이도록 최소
+    defaultVignette: 8.0,    // 중심으로 시선 집중
+    defaultBloom: 28.0,      // 하이라이트 번짐 — 자연스러운 물광
     enabledEffects: [BWEffectType.bloom],
     fallbackColor: Color(0xFF303030),
   );
@@ -155,9 +155,9 @@ abstract final class BWFilters {
     name: 'Paper Log',
     lutFileName: 'bw_paper.cube',
     description: '종이에 인쇄한 듯한 질감',
-    defaultIntensity: 0.85,
-    defaultGrain: 20.0,
-    defaultVignette: 35.0,
+    defaultIntensity: 0.88,
+    defaultGrain: 18.0,      // 인쇄 질감의 미세 입자
+    defaultVignette: 40.0,   // 오래된 사진 인화지 느낌
     enabledEffects: [BWEffectType.vignette],
     fallbackColor: Color(0xFF1A1715),
   );
@@ -167,9 +167,9 @@ abstract final class BWFilters {
     name: 'Porcelain',
     lutFileName: 'bw_porcelain.cube',
     description: '미드톤 밝게, 블랙 리프트 — 매끈한 피부 표현',
-    defaultIntensity: 0.9,
-    defaultGrain: 5.0,
-    defaultVignette: 8.0,
+    defaultIntensity: 0.95,  // 거의 풀 강도 — 밝기 극대화
+    defaultGrain: 2.0,       // 피부 표현 위해 최소
+    defaultVignette: 5.0,    // 아주 은은하게
     enabledEffects: [BWEffectType.beauty],
     fallbackColor: Color(0xFF3D3D3D),
   );
@@ -179,9 +179,9 @@ abstract final class BWFilters {
     name: 'Silky',
     lutFileName: 'bw_silky.cube',
     description: '대비 낮추고 부드럽게 — 셀카 전용',
-    defaultIntensity: 0.85,
-    defaultGrain: 3.0,
-    defaultVignette: 5.0,
+    defaultIntensity: 0.92,
+    defaultGrain: 0.0,       // 완전 무결점 — 셀카 최적
+    defaultVignette: 3.0,    // 거의 없는 수준
     enabledEffects: [BWEffectType.beauty],
     fallbackColor: Color(0xFF383838),
   );

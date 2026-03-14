@@ -51,7 +51,7 @@ final class MFVideoRecorder {
         var pixelBuffer: CVPixelBuffer?
         guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer) == kCVReturnSuccess,
               let buf = pixelBuffer else { return }
-        context.render(ciImage, to: buf)
+        context.render(ciImage, to: buf, bounds: ciImage.extent, colorSpace: CGColorSpaceCreateDeviceRGB())
         adaptor.append(buf, withPresentationTime: pts)
     }
 

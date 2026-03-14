@@ -117,14 +117,19 @@ class _FilterCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 색상 스워치 (썸네일 대용)
+            // 필터 썸네일
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ColoredBox(color: filter.fallbackColor),
+                    Image.asset(
+                      'assets/thumbnails/${filter.id}.jpg',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          ColoredBox(color: filter.fallbackColor),
+                    ),
 
                     // 이펙트 타입 뱃지
                     if (filter.enabledEffects.isNotEmpty)

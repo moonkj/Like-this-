@@ -637,6 +637,44 @@
 
 ---
 
+## Sprint 19 — 필터 파라미터 튜닝 & UI 버그 수정 (2026-03-14)
+
+### ✅ 완료
+
+#### Sprint 19-1: 필터 기본값 전면 튜닝
+- [x] 9종 필터 `defaultIntensity` / `defaultGrain` / `defaultVignette` 재조정 + 각 값에 의도 주석 추가
+  - Pure This: grain 0 / vignette 0 (순수 B&W)
+  - Deep Noir: intensity 1.0 / grain 38 / vignette 48 (느와르 극대화)
+  - Soft Grey: grain 6 / vignette 6 (에어리한 느낌)
+  - BY2K: grain 45 / vignette 22 (디지털 노이즈 + 렌즈 열화)
+  - Film Dust: grain 60 / dust 55 (heavy grain + 먼지 텍스처)
+  - Silver Glow: grain 3 / bloom 28 (글로우 주연, grain 조연)
+  - Paper Log: grain 18 / vignette 40 (인쇄 질감)
+  - Porcelain B&W: intensity 0.95 / grain 2 (피부 최적화)
+  - Silky B&W: grain 0 / vignette 3 (완전 무결점 셀카)
+
+#### Sprint 19-2: 필터 이름 변경
+- [x] `'2000s BY2K'` → `'BY2K'` (긴 이름 짤림 방지 + 브랜드 일관성)
+
+#### Sprint 19-3: 에디터 필터 아이템 이름 짤림 버그 수정
+- [x] `_FilterItem` 텍스트 컨테이너 width `58` → `64` (외부 SizedBox와 통일)
+- [x] `fontSize: 11` → `10` (긴 이름 2줄 수용 여유 확보)
+- [x] `overflow: TextOverflow.ellipsis` 추가 (2줄도 초과 시 말줄임표)
+
+#### Sprint 19-4: 필터 썸네일 고화질 업데이트
+- [x] 9종 `.jpg` 썸네일 전면 교체 (bw_2k, bw_dust, bw_glow, bw_noir, bw_paper, bw_porcelain, bw_pure, bw_silky, bw_soft)
+- 파일 크기 대폭 증가 (예: bw_pure 2.8KB → 19KB) — 실제 촬영본 기반 고품질 썸네일
+
+#### Sprint 19-5: processAndSaveVideo 백그라운드 처리 & renderSize 보정 (iOS)
+- [x] `CameraEnginePlugin.swift` `processAndSaveVideo` — `DispatchQueue.global(qos: .userInitiated).async` 로 이동 (메인 스레드 블록 방지)
+- [x] `videoTrack.preferredTransform` 기반 실제 renderW/H 계산 → 세로 영상 렌더 사이즈 오류 방지
+- [x] `tRect.width/height` 유효성 체크 후 `naturalSize` 폴백
+
+#### Sprint 19-6: 에디터 비교 모드 제거
+- [x] 에디터 화면(`editor_screen.dart`)에서 `_isComparing` 상태 및 비교 버튼 완전 제거 (카메라 전용 기능으로 역할 분리)
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용
