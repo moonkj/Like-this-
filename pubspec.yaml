@@ -2,7 +2,7 @@ name: likethis
 description: "Like This — Black & White Film Camera"
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ^3.11.0

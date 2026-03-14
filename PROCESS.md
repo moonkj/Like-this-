@@ -783,6 +783,8 @@
 - [x] IPA 빌드 (`version: 1.0.0+1`) + `xcrun altool --upload-app` 업로드 성공
   - Delivery UUID: `f8d1c137-fd33-4d2d-8be7-3a532835462e`
 - [x] `version: 1.0.0+2` — 현지화 포함 빌드 번호 증가
+- [x] `version: 1.0.0+3` — 동영상 썸네일 버그 수정 포함, App Store Connect 업로드
+  - Delivery UUID: `edcabfc7-70ed-40ca-923f-4bbb9d6a7d87`
 
 ---
 
