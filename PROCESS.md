@@ -750,6 +750,42 @@
 
 ---
 
+## Sprint 24 — 6개국어 현지화 & 앱스토어 제출 준비 (2026-03-14)
+
+### ✅ 완료
+
+#### Sprint 24-1: Flutter gen_l10n 6개국어 현지화
+- [x] `pubspec.yaml` — `flutter_localizations: sdk: flutter`, `intl: ^0.20.2`, `generate: true` 추가
+- [x] `l10n.yaml` 생성 — ARB 디렉터리, 템플릿(app_ko.arb), 출력 클래스(AppLocalizations) 설정
+- [x] ARB 파일 6종 생성 (ko/en/zh/fr/hi/ja) — 49개 키 (photoMode~appTagline)
+  - 파라미터 플레이스홀더: `{count}`, `{current}`, `{total}`, `{error}`
+- [x] `lib/l10n/l10n_ext.dart` — `AppLocalizationsX on BuildContext` 확장 추가
+- [x] `lib/l10n/gen/` — `flutter gen-l10n` 실행, 7개 파일 자동 생성
+- [x] `lib/app.dart` — `localizationsDelegates` + `supportedLocales` 6개 추가
+- [x] 전체 화면 하드코딩 한국어 → `context.l10n.xxx` 교체:
+  - `camera_screen.dart` — photoMode, videoMode, cameraInitError
+  - `editor_screen.dart` — exposure, contrast, grain, vignette, lightLeak, bloom, filterTab, effectsTab, cropTab, apply, cancel, reset, resetCrop, filterIntensity, nativeProcessError, saveError, deletePhotoConfirm, filterApplied, videoProcessError
+  - `gallery_screen.dart` — selectedCount, album, camera, delete, deleteConfirmTitle, deleteWarning, deletedCount, deleteFailedICloud, filterApplied, processingProgress, noPhotos, photoPermissionRequired, allowInSettings, videoProcessError, nativeProcessError, saveError, select
+  - `settings_screen.dart` — settings, silentShutter, silentShutterDesc, cameraSection, appInfo, version, privacyPolicy, termsOfService, contact
+  - `splash_screen.dart` — appTagline
+- [x] 크롭 비율 내부 키 `'자유'` → `'free'` 분리 + `displayLabel()` 현지화 함수
+
+#### Sprint 24-2: 필터 순서 변경
+- [x] Pure This, Deep Noir를 Porcelain B&W 오른쪽으로 이동
+  - 새 순서: softGrey → BY2K → filmDust → silverGlow → paperLog → porcelainBW → pureThis → deepNoir → silkyBW
+
+#### Sprint 24-3: 앱스토어 제출 준비
+- [x] `TARGETED_DEVICE_FAMILY = "1"` — iPhone 전용 (iPad 제외)
+- [x] `Podfile` — `platform :ios, '16.0'` (iOS 16.0 최소 버전)
+- [x] `docs/index.html` — GitHub Pages 개인정보처리방침 + 이용약관 페이지 (다크 테마)
+  - URL: https://moonkj.github.io/Like-this-/
+- [x] App Store Connect 앱 등록 — "Like This! - 아날로그 흑백 필름 카메라"
+- [x] IPA 빌드 (`version: 1.0.0+1`) + `xcrun altool --upload-app` 업로드 성공
+  - Delivery UUID: `f8d1c137-fd33-4d2d-8be7-3a532835462e`
+- [x] `version: 1.0.0+2` — 현지화 포함 빌드 번호 증가
+
+---
+
 ## 기술 결정 로그 (ADR)
 
 ### ADR-001: 클론 대신 flutter create 사용
